@@ -1,40 +1,50 @@
 {
   "expo": {
-    "name": "Dabba Nation Delivery",
+    "name": "DabbaNation Delivery",
     "slug": "dabba-rider-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#0F172A"
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FDFCF7"
     },
     "ios": {
       "supportsTablet": false,
+      "bundleIdentifier": "com.harsh02032002.dabbanationdelivery",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We need your location to assign nearby delivery orders."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0F172A"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#FDFCF7"
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
       ],
-      "package": "com.harsh02032002.dabbariderapp"
+      "package": "com.dabbanation.rider",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-location"
+      "expo-location",
+      "expo-notifications"
     ],
     "extra": {
       "eas": {
-        "projectId": "16af3455-26db-43cd-942d-34f4445dee11"
+        "projectId": "45d2828d-ffe8-4955-9805-2aa85632f51b"
       }
     }
   }

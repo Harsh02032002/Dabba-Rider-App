@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeliveryPartner } from '../types';
 import { connectSocket, disconnectSocket } from '../hooks/socket';
+import { registerForPushNotifications } from '../utils/pushNotifications';
 
 interface AuthContextType {
   partner: DeliveryPartner | null;
@@ -31,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setToken(t);
             setPartner(parsed);
             connectSocket(t);
+            registerForPushNotifications();
           }
         }
       } catch (e) {
@@ -47,6 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(newToken);
     setPartner(newPartner);
     connectSocket(newToken);
+    registerForPushNotifications();
   }, []);
 
   const logout = useCallback(async () => {

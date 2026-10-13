@@ -30,6 +30,7 @@ export interface Order {
   pickupLocation?: GeoPoint;
   pickupAddress?: string;
   dropLocation?: GeoPoint;
+  dropAddress?: string;
   deliveryAddress?: {
     location?: GeoPoint;
     street?: string;

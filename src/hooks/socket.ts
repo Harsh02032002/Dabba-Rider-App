@@ -1,22 +1,48 @@
 import { io, Socket } from 'socket.io-client';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-const SOCKET_URL = 'http://56.228.4.127:5000';
+const getSocketConfig = () => {
+  if (Platform.OS === 'web') {
+    return {
+      url: 'http://localhost:5000',
+      path: '/socket.io',
+    };
+  }
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    return {
+      url: `http://${ip}:5000`,
+      path: '/socket.io',
+    };
+  }
+  // Production fallback with /api/socket.io path
+  return {
+    url: 'https://dabbanation.in',
+    path: '/api/socket.io',
+  };
+};
 
 let socket: Socket | null = null;
 
 export const connectSocket = (token: string): Socket => {
   if (socket?.connected) return socket;
 
-  socket = io(SOCKET_URL, {
+  const config = getSocketConfig();
+  console.log(`[Socket] Connecting to ${config.url} (path: ${config.path})`);
+
+  socket = io(config.url, {
+    path: config.path,
     auth: { token },
-    transports: ['websocket'],
+    transports: ['websocket', 'polling'],
     reconnection: true,
-    reconnectionAttempts: 10,
+    reconnectionAttempts: 15,
     reconnectionDelay: 2000,
   });
 
   socket.on('connect', () => {
-    console.log('[Socket] Connected:', socket?.id);
+    console.log('[Socket] Connected successfully:', socket?.id);
   });
 
   socket.on('disconnect', (reason) => {
@@ -41,8 +67,8 @@ export const disconnectSocket = () => {
 
 export const emitPartnerOnline = () => socket?.emit('partnerOnline');
 export const emitPartnerOffline = () => socket?.emit('partnerOffline');
-export const emitLocationUpdate = (lat: number, lng: number) =>
-  socket?.emit('locationUpdate', { lat, lng });
+export const emitLocationUpdate = (lat: number, lng: number, orderId?: string) =>
+  socket?.emit('locationUpdate', { lat, lng, orderId });
 export const emitAcceptOrder = (orderId: string) =>
   socket?.emit('acceptOrder', { orderId });
 export const emitRejectOrder = (orderId: string) =>

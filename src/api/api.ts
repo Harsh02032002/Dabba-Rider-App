@@ -1,7 +1,21 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-const BASE_URL = 'http://56.228.4.127:5000';
+const getBaseUrl = () => {
+  if (Platform.OS === 'web') {
+    return 'http://localhost:5000';
+  }
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    return `http://${ip}:5000`;
+  }
+  return 'https://dabbanation.in';
+};
+
+const BASE_URL = getBaseUrl();
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -41,14 +55,18 @@ export const loginPartner = (data: { email: string; password: string }) =>
   api.post('/api/partner/login', data);
 
 // Partner
-export const toggleOnline = () => api.put('/api/partner/toggle-online');
+export const toggleOnline = (coords?: { lat: number; lng: number }) => api.put('/api/partner/toggle-online', coords || {});
 
 export const updateLocation = (lat: number, lng: number) =>
   api.put('/api/partner/location-update', {
+    lat,
+    lng,
     location: { type: 'Point', coordinates: [lng, lat] },
   });
 
 export const getCurrentOrder = () => api.get('/api/partner/current-order');
+
+export const getAvailableOrders = () => api.get('/api/partner/available-orders');
 
 export const getEarnings = () => api.get('/api/partner/earnings');
 
@@ -56,9 +74,12 @@ export const getPartnerProfile = () => api.get('/api/partner/profile');
 
 export const getOrderHistory = () => api.get('/api/partner/order-history');
 
+export const registerPushToken = (pushToken: string) =>
+  api.post('/api/partner/push-token', { pushToken, fcmToken: pushToken });
+
 // Order
 export const acceptOrder = (orderId: string) =>
-  api.put('/api/order/accept', { orderId });
+  api.post(`/api/partner/orders/${orderId}/accept`, { orderId });
 
 export const updateOrderStatus = (orderId: string, status: string) =>
   api.put('/api/order/status-update', { orderId, status });
