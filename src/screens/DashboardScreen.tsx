@@ -30,6 +30,8 @@ const DashboardScreen = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const locationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeOrderRef = useRef<Order | null>(null);
+  activeOrderRef.current = activeOrder;
 
   useEffect(() => {
     if (partner?.isOnline !== undefined) setIsOnline(partner.isOnline);
@@ -78,6 +80,8 @@ const DashboardScreen = ({ navigation }: any) => {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  // Re-sync when coming back from ActiveOrder / Orders (accept, pickup, delivery)
+  useEffect(() => navigation.addListener('focus', fetchData), [navigation, fetchData]);
 
   // Socket listeners
   useEffect(() => {
@@ -87,6 +91,8 @@ const DashboardScreen = ({ navigation }: any) => {
     const handleNewOrder = (data: any) => {
       if (!data) return;
       const orderData = data.order || data;
+      // Already delivering at capacity — the request stays visible in the Orders tab
+      if (activeOrderRef.current) return;
       setIncomingOrder({
         order: {
           _id: orderData._id || orderData.orderId,
@@ -96,7 +102,7 @@ const DashboardScreen = ({ navigation }: any) => {
           pickupAddress: orderData.pickupAddress,
           dropAddress: orderData.dropAddress || orderData.deliveryAddress?.street,
           totalAmount: orderData.totalAmount || orderData.total,
-          deliveryFee: orderData.deliveryFee || orderData.riderPayout,
+          deliveryFee: orderData.riderPayout || orderData.deliveryFee,
           distance: orderData.distance,
           status: 'pending',
           createdAt: orderData.timestamp || new Date().toISOString(),
@@ -113,7 +119,26 @@ const DashboardScreen = ({ navigation }: any) => {
         navigation.navigate('ActiveOrder', { order: data.order });
       }
     };
-    const handleOrderCancelled = () => setIncomingOrder(null);
+    // Another rider accepted (or the order was withdrawn) — close the request if it is showing
+    const handleRequestTaken = (data: any) => {
+      const id = String(data?.orderId || '');
+      setIncomingOrder((prev) => (prev && String(prev.order._id) === id ? null : prev));
+    };
+    const handleOrderCancelled = (data: any) => {
+      handleRequestTaken(data);
+      setActiveOrder((prev) => {
+        if (prev && String(prev._id) === String(data?.orderId)) {
+          Alert.alert('❌ Order Cancelled', `Order #${data?.orderNumber || ''} was cancelled. You are free to accept other orders.`);
+          return null;
+        }
+        return prev;
+      });
+      fetchData();
+    };
+    const handleOrderReady = (data: any) => {
+      Alert.alert('📦 Order Ready for Pickup!', data?.message || `Order #${data?.orderNumber || ''} is ready.`);
+      fetchData();
+    };
     const handleOrderDelivered = () => {
       setActiveOrder(null);
       fetchData();
@@ -121,15 +146,19 @@ const DashboardScreen = ({ navigation }: any) => {
 
     socket.on('delivery_request', handleNewOrder);
     socket.on('newDeliveryRequest', handleNewOrder);
+    socket.on('delivery_request_taken', handleRequestTaken);
     socket.on('orderAssigned', handleOrderAssigned);
     socket.on('orderCancelled', handleOrderCancelled);
+    socket.on('order_ready', handleOrderReady);
     socket.on('orderDelivered', handleOrderDelivered);
 
     return () => {
       socket.off('delivery_request', handleNewOrder);
       socket.off('newDeliveryRequest', handleNewOrder);
+      socket.off('delivery_request_taken', handleRequestTaken);
       socket.off('orderAssigned', handleOrderAssigned);
       socket.off('orderCancelled', handleOrderCancelled);
+      socket.off('order_ready', handleOrderReady);
       socket.off('orderDelivered', handleOrderDelivered);
     };
   }, [fetchData, navigation]);

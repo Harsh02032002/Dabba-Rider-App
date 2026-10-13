@@ -6,18 +6,34 @@ import {
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { getCurrentOrder, updateOrderStatus, confirmDeliveryOTP } from '../api/api';
-import { emitOrderStatusUpdate, emitLocationUpdate } from '../hooks/socket';
-import { Order, OrderStatus } from '../types';
+import { emitOrderStatusUpdate, emitLocationUpdate, getSocket } from '../hooks/socket';
+import { Order, DeliveryStatus } from '../types';
 import { theme } from '../theme/colors';
 import RiderMap from '../components/RiderMap'; // ✅ FREE — uses OpenStreetMap, no API key needed
 
 const { width, height } = Dimensions.get('window');
 
-const statusFlow: { status: OrderStatus; label: string; next: OrderStatus | null; icon: string }[] = [
-  { status: 'accepted', label: 'Reached Pickup', next: 'picked', icon: 'storefront-outline' },
-  { status: 'picked', label: 'Picked Up — Start Delivery', next: 'delivered', icon: 'bicycle-outline' },
+/** Rider leg steps — mirrors backend Order.deliveryStatus */
+const statusFlow: { status: DeliveryStatus; label: string; next: DeliveryStatus | null; icon: string }[] = [
+  { status: 'assigned', label: 'Reached Restaurant', next: 'arrived_at_restaurant', icon: 'storefront-outline' },
+  { status: 'arrived_at_restaurant', label: 'Picked Up — Start Delivery', next: 'picked_up', icon: 'bag-check-outline' },
+  { status: 'picked_up', label: 'Deliver to Customer', next: 'delivered', icon: 'bicycle-outline' },
   { status: 'delivered', label: '✓ Delivered', next: null, icon: 'checkmark-circle' },
 ];
+
+/** Older orders have no deliveryStatus — derive it from the kitchen status */
+const getDeliveryStep = (order: Order | null): DeliveryStatus => {
+  if (!order) return 'assigned';
+  if (order.status === 'delivered') return 'delivered';
+  if (order.deliveryStatus) return order.deliveryStatus;
+  return order.status === 'out_for_delivery' ? 'picked_up' : 'assigned';
+};
+
+const KITCHEN_HINTS: Record<string, string> = {
+  confirmed: '👨‍🍳 Restaurant confirmed the order — food is being prepared',
+  preparing: '👨‍🍳 Food is being prepared',
+  ready: '✅ Food is ready for pickup',
+};
 
 const ActiveOrderScreen = ({ navigation, route }: any) => {
   const passedOrder = route?.params?.order as Order | undefined;
@@ -32,11 +48,15 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
   const [riderLocation, setRiderLocation] = useState<{ lat: number; lng: number } | null>(null);
   const locationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Always load the latest persisted state for the active delivery (passed params can be stale)
   const fetchOrder = useCallback(async () => {
     try {
       const { data } = await getCurrentOrder();
-      if (data?.order) setOrder(data.order);
-      else if (!passedOrder) navigation.goBack();
+      if (data?.order && (!passedOrder || String(data.order._id) === String(passedOrder._id))) {
+        setOrder(data.order);
+      } else if (!passedOrder) {
+        navigation.goBack();
+      }
     } catch {
       if (!passedOrder) navigation.goBack();
     } finally {
@@ -45,8 +65,38 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
   }, [navigation, passedOrder]);
 
   useEffect(() => {
-    if (!passedOrder) fetchOrder();
-  }, [fetchOrder, passedOrder]);
+    if (!isReadOnly) fetchOrder();
+  }, [fetchOrder, isReadOnly]);
+
+  // Kitchen updates (preparing / ready) and cancellation for this order
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || isReadOnly || !order?._id) return;
+    const orderId = String(order._id);
+    const onUpdate = (data: any) => {
+      if (String(data?.orderId) !== orderId) return;
+      setOrder((prev) => (prev ? {
+        ...prev,
+        status: data.status || prev.status,
+        deliveryStatus: data.deliveryStatus !== undefined ? data.deliveryStatus : prev.deliveryStatus,
+      } : prev));
+    };
+    const onCancelled = (data: any) => {
+      if (String(data?.orderId) !== orderId) return;
+      if (locationInterval.current) clearInterval(locationInterval.current);
+      Alert.alert('❌ Order Cancelled', 'This order was cancelled. You are free to accept other orders.', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    };
+    socket.on('order_status_update', onUpdate);
+    socket.on('order_ready', onUpdate);
+    socket.on('orderCancelled', onCancelled);
+    return () => {
+      socket.off('order_status_update', onUpdate);
+      socket.off('order_ready', onUpdate);
+      socket.off('orderCancelled', onCancelled);
+    };
+  }, [isReadOnly, order?._id, navigation]);
 
   // Live location tracking for rider
   useEffect(() => {
@@ -79,40 +129,53 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
     };
   }, [isReadOnly, order?._id, order?.status]);
 
-  const handleStatusUpdate = async (nextStatus: OrderStatus) => {
-    if (!order) return;
+  const handleStatusUpdate = async (nextStatus: DeliveryStatus) => {
+    if (!order || updating) return;
     if (nextStatus === 'delivered') { setShowOTPModal(true); return; }
     setUpdating(true);
     try {
-      await updateOrderStatus(order._id, nextStatus);
+      const { data } = await updateOrderStatus(order._id, nextStatus);
       emitOrderStatusUpdate(order._id, nextStatus);
-      setOrder({ ...order, status: nextStatus });
-      Alert.alert('✅ Status Updated', `Order is now: ${nextStatus}`);
-    } catch {
-      Alert.alert('Error', 'Failed to update status. Please try again.');
+      if (data?.order) {
+        setOrder((prev) => (prev ? { ...prev, status: data.order.status, deliveryStatus: data.order.deliveryStatus } : prev));
+      }
+      Alert.alert(
+        '✅ Status Updated',
+        nextStatus === 'picked_up' ? 'Order picked up. The customer has been notified.' : 'Restaurant notified that you have arrived.',
+      );
+    } catch (err: any) {
+      const message = err.response?.data?.message || (err.response ? 'Failed to update status.' : 'Network error. Please try again.');
+      Alert.alert('Error', message);
+      if (err.response?.status === 409) fetchOrder(); // resync after a conflict
     } finally {
       setUpdating(false);
     }
   };
 
   const handleOTPConfirm = async () => {
-    if (!order || otp.length !== 4) { setOtpError('Please enter the 4-digit OTP'); return; }
+    if (!order || updating) return;
+    if (otp.length !== 4) { setOtpError('Please enter the 4-digit OTP'); return; }
     setUpdating(true);
     setOtpError('');
     try {
-      await confirmDeliveryOTP(order._id, otp);
+      const { data } = await confirmDeliveryOTP(order._id, otp);
       emitOrderStatusUpdate(order._id, 'delivered');
       if (locationInterval.current) {
         clearInterval(locationInterval.current);
         locationInterval.current = null;
       }
       setShowOTPModal(false);
-      const earned = order.deliveryFee || (order as any).riderPayout || 30;
-      Alert.alert('🎉 Delivered!', `Order delivered successfully!\n₹${earned} delivery fee has been added to your earnings & wallet!`, [
-        { text: 'Great!', onPress: () => navigation.goBack() },
-      ]);
+      setOrder((prev) => (prev ? { ...prev, status: 'delivered', deliveryStatus: 'delivered' } : prev));
+      const earned = data?.payout || order.payout || order.riderPayout || order.deliveryFee || 30;
+      Alert.alert(
+        '🎉 Delivered!',
+        data?.alreadyDelivered
+          ? 'This order was already marked delivered.'
+          : `Order delivered successfully!\n₹${earned} has been added to your earnings & wallet!`,
+        [{ text: 'Great!', onPress: () => navigation.goBack() }],
+      );
     } catch (err: any) {
-      setOtpError(err.response?.data?.message || 'Invalid OTP. Try again.');
+      setOtpError(err.response?.data?.message || (err.response ? 'Invalid OTP. Try again.' : 'Network error. Please try again.'));
     } finally {
       setUpdating(false);
     }
@@ -161,8 +224,12 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
     pickupLng = 76.7410;
   }
 
-  const currentStep = statusFlow.find((s) => s.status === order?.status);
-  const stepIndex = statusFlow.findIndex((s) => s.status === order?.status);
+  const deliveryStep = getDeliveryStep(order);
+  const currentStep = statusFlow.find((s) => s.status === deliveryStep);
+  const stepIndex = statusFlow.findIndex((s) => s.status === deliveryStep);
+  const kitchenHint = deliveryStep === 'assigned' || deliveryStep === 'arrived_at_restaurant'
+    ? KITCHEN_HINTS[order?.status || '']
+    : undefined;
 
   const customerPhone = (order as any)?.userId?.phone || (order as any)?.customerPhone;
   const customerName = order?.customerName || 'Customer';
@@ -276,13 +343,21 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
                 : 'Cash on Delivery (COD)'}
             </Text>
             <Text style={{ fontSize: 13, color: '#16A34A', fontWeight: '700', marginTop: 3 }}>
-              🛵 Delivery Fee (Your Earning): ₹{order.deliveryFee || (order as any).riderPayout || 30}
+              🛵 Delivery Fee (Your Earning): ₹{order.payout || order.riderPayout || order.deliveryFee || 30}
             </Text>
           </View>
-          <Text style={styles.paymentAmt}>₹{order.totalAmount || 0}</Text>
+          <Text style={styles.paymentAmt}>₹{order.totalAmount || order.total || 0}</Text>
         </View>
 
         <View style={styles.divider} />
+
+        {!isReadOnly && kitchenHint ? (
+          <View style={[styles.kitchenBanner, order.status === 'ready' && styles.kitchenBannerReady]}>
+            <Text style={[styles.kitchenBannerText, order.status === 'ready' && styles.kitchenBannerTextReady]}>
+              {kitchenHint}
+            </Text>
+          </View>
+        ) : null}
 
         {/* Status Steps */}
         {!isReadOnly && (
@@ -453,6 +528,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 12,
   },
   actionBtnText: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  kitchenBanner: {
+    backgroundColor: '#FFF7ED',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  kitchenBannerReady: { backgroundColor: '#DCFCE7' },
+  kitchenBannerText: { fontSize: 13, fontWeight: '700', color: '#9A3412' },
+  kitchenBannerTextReady: { color: '#15803D' },
   deliveredBanner: {
     backgroundColor: '#DCFCE7', borderRadius: 14, padding: 16,
     flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12,

@@ -13,13 +13,23 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { getAvailableOrders, acceptOrder } from '../api/api';
+import { getSocket } from '../hooks/socket';
 import { theme } from '../theme/colors';
+
+const KITCHEN_LABELS: Record<string, string> = {
+  confirmed: 'Confirmed',
+  preparing: 'Preparing',
+  ready: 'Food Ready',
+  out_for_delivery: 'Out for Delivery',
+};
 
 export default function OrdersScreen() {
   const navigation = useNavigation<any>();
   const [orders, setOrders] = useState<any[]>([]);
+  const [maxActiveOrders, setMaxActiveOrders] = useState(1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
@@ -27,9 +37,12 @@ export default function OrdersScreen() {
       const res = await getAvailableOrders();
       if (res.data?.success) {
         setOrders(res.data.orders || []);
+        if (res.data.maxActiveOrders) setMaxActiveOrders(res.data.maxActiveOrders);
+        setError(null);
       }
     } catch (err: any) {
       console.log('Error fetching available orders:', err.message);
+      setError(err.response?.data?.message || 'Could not load orders. Pull down to retry.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -38,18 +51,44 @@ export default function OrdersScreen() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 7000); // live refresh every 7s
+    const interval = setInterval(fetchOrders, 7000); // fallback refresh when socket events are missed
     return () => clearInterval(interval);
   }, [fetchOrders]);
 
+  // Real-time: new requests, orders taken by other riders, cancellations
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    const removeOrder = (data: any) => {
+      const id = String(data?.orderId || '');
+      if (!id) return;
+      setOrders((prev) => prev.filter((o) => String(o._id) !== id || o.isAssignedToMe));
+    };
+    const refresh = () => fetchOrders();
+    socket.on('delivery_request', refresh);
+    socket.on('delivery_request_taken', removeOrder);
+    socket.on('orderCancelled', refresh);
+    socket.on('order_status_update', refresh);
+    return () => {
+      socket.off('delivery_request', refresh);
+      socket.off('delivery_request_taken', removeOrder);
+      socket.off('orderCancelled', refresh);
+      socket.off('order_status_update', refresh);
+    };
+  }, [fetchOrders]);
+
+  const activeCount = orders.filter((o) => o.isAssignedToMe).length;
+  const atCapacity = activeCount >= maxActiveOrders;
+
   const handleAccept = async (order: any) => {
+    if (acceptingId) return; // one accept at a time — prevents double taps
     setAcceptingId(order._id);
     try {
       const res = await acceptOrder(order._id);
       if (res.data?.success) {
         Alert.alert(
           '🎉 Order Accepted!',
-          `Order #${order.orderNumber} is now assigned to you. Live tracking has started for customer.`,
+          `Order #${order.orderNumber} is now assigned to you. Head to ${order.restaurantName || 'the restaurant'} for pickup.`,
           [
             {
               text: 'Start Delivery',
@@ -64,7 +103,18 @@ export default function OrdersScreen() {
         Alert.alert('Unable to Accept', res.data?.message || 'Order could not be accepted.');
       }
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || err.message || 'Failed to accept order.');
+      const status = err.response?.status;
+      const message = err.response?.data?.message || err.message || 'Failed to accept order.';
+      if (status === 409) {
+        // Taken by another rider or capacity reached — drop it from the list and resync
+        setOrders((prev) => prev.filter((o) => o._id !== order._id));
+        Alert.alert('Order unavailable', message);
+        fetchOrders();
+      } else if (!err.response) {
+        Alert.alert('Network error', 'Could not reach the server. Check your connection and try again.');
+      } else {
+        Alert.alert('Unable to Accept', message);
+      }
     } finally {
       setAcceptingId(null);
     }
@@ -72,7 +122,9 @@ export default function OrdersScreen() {
 
   const renderOrderItem = ({ item }: { item: any }) => {
     const isAccepting = acceptingId === item._id;
-    const isLive = item.isAssignedToMe || item.status === 'out_for_delivery';
+    const isLive = !!item.isAssignedToMe;
+    const kitchenLabel = KITCHEN_LABELS[item.status];
+    const acceptDisabled = !!acceptingId || atCapacity;
 
     return (
       <View style={[styles.card, isLive && styles.cardActive]}>
@@ -87,6 +139,13 @@ export default function OrdersScreen() {
               <Text style={styles.orderItemsCount}>
                 {item.items?.length || 1} items • ₹{item.total || item.subtotal}
               </Text>
+              {kitchenLabel ? (
+                <View style={[styles.statusChip, item.status === 'ready' && styles.statusChipReady]}>
+                  <Text style={[styles.statusChipText, item.status === 'ready' && styles.statusChipTextReady]}>
+                    {kitchenLabel}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -143,16 +202,18 @@ export default function OrdersScreen() {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[styles.acceptBtn, isAccepting && { opacity: 0.7 }]}
+              style={[styles.acceptBtn, (isAccepting || acceptDisabled) && { opacity: 0.6 }]}
               onPress={() => handleAccept(item)}
-              disabled={isAccepting}
+              disabled={acceptDisabled}
             >
               {isAccepting ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                  <Text style={styles.btnText}>Accept Order (Earn ₹{item.payout || 30})</Text>
+                  <Text style={styles.btnText}>
+                    {atCapacity ? 'Finish your active delivery first' : `Accept Order (Earn ₹${item.payout || 30})`}
+                  </Text>
                 </>
               )}
             </TouchableOpacity>
@@ -170,9 +231,17 @@ export default function OrdersScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Available Orders</Text>
         <Text style={styles.headerSubtitle}>
-          {orders.length} order{orders.length === 1 ? '' : 's'} available in your zone
+          {orders.length - activeCount} order{orders.length - activeCount === 1 ? '' : 's'} available in your zone
+          {activeCount > 0 ? ` • ${activeCount} active` : ''}
         </Text>
       </View>
+
+      {error ? (
+        <View style={styles.errorBanner}>
+          <Ionicons name="cloud-offline-outline" size={16} color="#B91C1C" />
+          <Text style={styles.errorBannerText}>{error}</Text>
+        </View>
+      ) : null}
 
       {loading ? (
         <View style={styles.centerContainer}>
@@ -305,6 +374,42 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
     fontWeight: '500',
+  },
+  statusChip: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#F3F4F6',
+  },
+  statusChipReady: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusChipText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#4B5563',
+    textTransform: 'uppercase',
+  },
+  statusChipTextReady: {
+    color: '#15803D',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#B91C1C',
+    fontWeight: '600',
   },
   payoutBadge: {
     alignItems: 'flex-end',

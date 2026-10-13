@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Modal, Dimensions, Image,
+  View, Text, TouchableOpacity, StyleSheet, Modal, Dimensions, Image, ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { IncomingOrderRequest, Order } from '../types';
@@ -31,15 +31,25 @@ const IncomingOrderModal: React.FC<Props> = ({ orderRequest, onClose, onAccepted
   }, [timeLeft]);
 
   const handleAccept = useCallback(async () => {
+    if (accepting) return;
     setAccepting(true);
     try {
+      const res = await acceptOrderAPI(order._id);
       emitAcceptOrder(order._id);
-      await acceptOrderAPI(order._id);
-      onAccepted(order);
-    } catch {
+      onAccepted(res.data?.order || order);
+    } catch (err: any) {
       setAccepting(false);
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message || 'Could not accept this order. Please try again.';
+      if (status === 409 || status === 403 || status === 404) {
+        // Taken by another rider, out of range, or capacity reached — this request is no longer actionable
+        Alert.alert('Order unavailable', message);
+        onClose();
+      } else {
+        Alert.alert('Error', message);
+      }
     }
-  }, [order, onAccepted]);
+  }, [accepting, order, onAccepted, onClose]);
 
   const handleReject = useCallback(() => {
     emitRejectOrder(order._id);

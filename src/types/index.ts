@@ -18,7 +18,12 @@ export interface DeliveryPartner {
   createdAt: string;
 }
 
-export type OrderStatus = 'pending' | 'searching' | 'accepted' | 'picked' | 'delivered' | 'cancelled';
+/** Kitchen / overall order status (backend Order.status) */
+export type OrderStatus =
+  | 'pending' | 'confirmed' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'cancelled';
+
+/** Rider leg (backend Order.deliveryStatus) */
+export type DeliveryStatus = 'assigned' | 'arrived_at_restaurant' | 'picked_up' | 'delivered';
 
 export interface Order {
   _id: string;
@@ -33,14 +38,22 @@ export interface Order {
   dropAddress?: string;
   deliveryAddress?: {
     location?: GeoPoint;
+    fullAddress?: string;
     street?: string;
     city?: string;
     state?: string;
     pincode?: string;
   };
   status: OrderStatus;
+  deliveryStatus?: DeliveryStatus | null;
+  orderNumber?: string;
+  paymentMethod?: string;
   totalAmount: number;
+  total?: number;
   deliveryFee?: number;
+  riderPayout?: number;
+  payout?: number;
+  isAssignedToMe?: boolean;
   distance?: number;
   deliveryOTP?: string;
   createdAt: string;
