@@ -60,6 +60,7 @@ export const sendPartnerLoginOtp = (data: { identifier: string; password?: strin
     email: data.identifier,
     phone: data.identifier,
     password: data.password,
+    role: 'delivery',
   });
 
 export const verifyPartnerLoginOtp = (data: { identifier: string; otp: string }) =>
@@ -68,6 +69,7 @@ export const verifyPartnerLoginOtp = (data: { identifier: string; otp: string })
     email: data.identifier,
     phone: data.identifier,
     otp: data.otp,
+    role: 'delivery',
   });
 
 // Partner
