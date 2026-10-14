@@ -54,6 +54,22 @@ export const registerPartner = (data: {
 export const loginPartner = (data: { email: string; password: string }) =>
   api.post('/api/partner/login', data);
 
+export const sendPartnerLoginOtp = (data: { identifier: string; password?: string }) =>
+  api.post('/api/partner/send-login-otp', {
+    identifier: data.identifier,
+    email: data.identifier,
+    phone: data.identifier,
+    password: data.password,
+  });
+
+export const verifyPartnerLoginOtp = (data: { identifier: string; otp: string }) =>
+  api.post('/api/partner/verify-login-otp', {
+    identifier: data.identifier,
+    email: data.identifier,
+    phone: data.identifier,
+    otp: data.otp,
+  });
+
 // Partner
 export const toggleOnline = (coords?: { lat: number; lng: number }) => api.put('/api/partner/toggle-online', coords || {});
 

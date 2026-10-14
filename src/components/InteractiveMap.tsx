@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 interface InteractiveMapProps {
   pickupCoords?: [number, number];
@@ -36,7 +37,10 @@ const InteractiveMap = ({
     <View style={styles.container}>
       {/* Map Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>🗺️ Live Delivery Map</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Ionicons name="map-outline" size={20} color="#fff" />
+          <Text style={styles.title}>Live Delivery Map</Text>
+        </View>
         {distance && (
           <View style={styles.distanceBadge}>
             <Text style={styles.distanceText}>{distance} km</Text>
@@ -49,7 +53,7 @@ const InteractiveMap = ({
         {/* Current Location */}
         {currentLocation && (
           <View style={[styles.marker, styles.currentLocation]}>
-            <Text style={styles.markerIcon}>🛵</Text>
+            <Ionicons name="bicycle" size={22} color="#2563EB" />
             <Text style={styles.markerLabel}>You</Text>
           </View>
         )}
@@ -57,7 +61,7 @@ const InteractiveMap = ({
         {/* Pickup Location */}
         {pickupCoords && (
           <View style={[styles.marker, styles.pickupLocation]}>
-            <Text style={styles.markerIcon}>🏪</Text>
+            <Ionicons name="storefront" size={22} color="#EA580C" />
             <Text style={styles.markerLabel}>Pickup</Text>
           </View>
         )}
@@ -65,7 +69,7 @@ const InteractiveMap = ({
         {/* Drop Location */}
         {dropCoords && (
           <View style={[styles.marker, styles.dropLocation]}>
-            <Text style={styles.markerIcon}>🏠</Text>
+            <Ionicons name="home" size={22} color="#16A34A" />
             <Text style={styles.markerLabel}>Drop-off</Text>
           </View>
         )}
@@ -82,7 +86,7 @@ const InteractiveMap = ({
         {/* Tracking Status */}
         <View style={styles.trackingStatus}>
           <Text style={styles.trackingText}>
-            {isTracking ? '📍 Tracking Active' : '📍 Location Paused'}
+            {isTracking ? 'Tracking Active' : 'Location Paused'}
           </Text>
         </View>
       </View>
@@ -94,7 +98,7 @@ const InteractiveMap = ({
           onPress={() => setIsTracking(!isTracking)}
         >
           <Text style={styles.controlText}>
-            {isTracking ? '⏸ Pause' : '▶ Start'} Tracking
+            {isTracking ? 'Pause' : 'Start'} Tracking
           </Text>
         </TouchableOpacity>
       </View>

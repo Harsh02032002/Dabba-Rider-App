@@ -128,7 +128,7 @@ const DashboardScreen = ({ navigation }: any) => {
       handleRequestTaken(data);
       setActiveOrder((prev) => {
         if (prev && String(prev._id) === String(data?.orderId)) {
-          Alert.alert('❌ Order Cancelled', `Order #${data?.orderNumber || ''} was cancelled. You are free to accept other orders.`);
+          Alert.alert('Order Cancelled', `Order #${data?.orderNumber || ''} was cancelled. You are free to accept other orders.`);
           return null;
         }
         return prev;
@@ -136,7 +136,7 @@ const DashboardScreen = ({ navigation }: any) => {
       fetchData();
     };
     const handleOrderReady = (data: any) => {
-      Alert.alert('📦 Order Ready for Pickup!', data?.message || `Order #${data?.orderNumber || ''} is ready.`);
+      Alert.alert('Order Ready for Pickup', data?.message || `Order #${data?.orderNumber || ''} is ready.`);
       fetchData();
     };
     const handleOrderDelivered = () => {
@@ -168,8 +168,14 @@ const DashboardScreen = ({ navigation }: any) => {
     if (status !== 'granted') return;
     locationInterval.current = setInterval(async () => {
       try {
-        const loc = await Location.getCurrentPositionAsync({});
-        emitLocationUpdate(loc.coords.latitude, loc.coords.longitude);
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        emitLocationUpdate(
+          loc.coords.latitude,
+          loc.coords.longitude,
+           undefined,
+          loc.coords.heading ?? null,
+          loc.coords.speed ?? null,
+        );
       } catch {}
     }, 5000);
   }, []);
@@ -191,7 +197,13 @@ const DashboardScreen = ({ navigation }: any) => {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           if (loc?.coords) {
             coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-            emitLocationUpdate(loc.coords.latitude, loc.coords.longitude);
+            emitLocationUpdate(
+              loc.coords.latitude,
+              loc.coords.longitude,
+              undefined,
+              loc.coords.heading ?? null,
+              loc.coords.speed ?? null,
+            );
           }
         }
       } catch {}

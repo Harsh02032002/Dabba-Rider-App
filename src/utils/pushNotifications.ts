@@ -49,9 +49,24 @@ export async function registerForPushNotifications(): Promise<string | null> {
       (Constants.expoConfig as any)?.extra?.eas?.projectId ||
       (Constants as any)?.easConfig?.projectId;
 
-    const { data: token } = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined
-    );
+    let token: string | null = null;
+    try {
+      const { data } = await Notifications.getExpoPushTokenAsync(
+        projectId ? { projectId } : undefined
+      );
+      token = data;
+    } catch (expoErr: any) {
+      console.log('[Push] Expo token fallback to native FCM device token:', expoErr?.message);
+      try {
+        const deviceToken = await Notifications.getDevicePushTokenAsync();
+        token = typeof deviceToken?.data === 'string' ? deviceToken.data : null;
+      } catch {}
+    }
+
+    if (!token) {
+      console.log('[Push] Could not obtain rider push token');
+      return null;
+    }
 
     await registerPushToken(token);
     console.log('[Push] Rider push token registered:', token);
@@ -61,3 +76,38 @@ export async function registerForPushNotifications(): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * Displays a native OS push notification banner immediately on the rider's phone
+ * (with sound & vibration on the 'orders' channel).
+ */
+export async function showLocalPushNotification(
+  title: string,
+  body: string,
+  data: Record<string, any> = {}
+) {
+  try {
+    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('orders', {
+        name: 'Orders',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        sound: 'default',
+      });
+    }
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data,
+        sound: 'default',
+        ...(Platform.OS === 'android' ? { channelId: 'orders' } : {}),
+      } as any,
+      trigger: null,
+    });
+  } catch (err: any) {
+    console.log('[Push] Rider local notification error:', err?.message || err);
+  }
+}
+

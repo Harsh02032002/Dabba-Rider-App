@@ -53,6 +53,19 @@ export const connectSocket = (token: string): Socket => {
     console.error('[Socket] Connection error:', err.message);
   });
 
+  // Listen for all rider lifecycle notifications (new request, ready for pickup, assigned, delivered, cancelled)
+  socket.on('notification', (notif: any) => {
+    console.log('[RiderSocket] notification received:', notif);
+    if (notif?.title && notif?.message) {
+      const { showLocalPushNotification } = require('../utils/pushNotifications');
+      showLocalPushNotification(notif.title, notif.message, {
+        orderId: notif.orderId,
+        type: notif.type,
+        ...(notif.data || {}),
+      });
+    }
+  });
+
   return socket;
 };
 
@@ -67,8 +80,13 @@ export const disconnectSocket = () => {
 
 export const emitPartnerOnline = () => socket?.emit('partnerOnline');
 export const emitPartnerOffline = () => socket?.emit('partnerOffline');
-export const emitLocationUpdate = (lat: number, lng: number, orderId?: string) =>
-  socket?.emit('locationUpdate', { lat, lng, orderId });
+export const emitLocationUpdate = (
+  lat: number,
+  lng: number,
+  orderId?: string,
+  heading?: number | null,
+  speed?: number | null,
+) => socket?.emit('locationUpdate', { lat, lng, orderId, heading, speed });
 export const emitAcceptOrder = (orderId: string) =>
   socket?.emit('acceptOrder', { orderId });
 export const emitRejectOrder = (orderId: string) =>

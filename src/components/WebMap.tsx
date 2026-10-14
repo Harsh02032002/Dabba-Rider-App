@@ -50,10 +50,10 @@ const WebMap = ({ location: propLocation }: WebMapProps) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>🗺️ Web Map View</Text>
+      <Text style={styles.title}>Web Map View</Text>
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>📍 Getting location...</Text>
+          <Text style={styles.loadingText}>Getting location...</Text>
         </View>
       ) : (
         <View style={styles.mapContainer}>

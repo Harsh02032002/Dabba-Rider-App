@@ -111,7 +111,7 @@ android {
 
     namespace 'com.harsh02032002.dabbariderapp'
     defaultConfig {
-        applicationId 'com.harsh02032002.dabbariderapp'
+        applicationId 'com.dabbanation.rider'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

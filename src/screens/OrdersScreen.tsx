@@ -87,7 +87,7 @@ export default function OrdersScreen() {
       const res = await acceptOrder(order._id);
       if (res.data?.success) {
         Alert.alert(
-          '🎉 Order Accepted!',
+          'Order Accepted',
           `Order #${order.orderNumber} is now assigned to you. Head to ${order.restaurantName || 'the restaurant'} for pickup.`,
           [
             {

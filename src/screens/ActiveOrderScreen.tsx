@@ -18,7 +18,7 @@ const statusFlow: { status: DeliveryStatus; label: string; next: DeliveryStatus 
   { status: 'assigned', label: 'Reached Restaurant', next: 'arrived_at_restaurant', icon: 'storefront-outline' },
   { status: 'arrived_at_restaurant', label: 'Picked Up — Start Delivery', next: 'picked_up', icon: 'bag-check-outline' },
   { status: 'picked_up', label: 'Deliver to Customer', next: 'delivered', icon: 'bicycle-outline' },
-  { status: 'delivered', label: '✓ Delivered', next: null, icon: 'checkmark-circle' },
+  { status: 'delivered', label: 'Delivered', next: null, icon: 'checkmark-circle' },
 ];
 
 /** Older orders have no deliveryStatus — derive it from the kitchen status */
@@ -30,9 +30,9 @@ const getDeliveryStep = (order: Order | null): DeliveryStatus => {
 };
 
 const KITCHEN_HINTS: Record<string, string> = {
-  confirmed: '👨‍🍳 Restaurant confirmed the order — food is being prepared',
-  preparing: '👨‍🍳 Food is being prepared',
-  ready: '✅ Food is ready for pickup',
+  confirmed: 'Restaurant confirmed the order — food is being prepared',
+  preparing: 'Food is being prepared',
+  ready: 'Food is ready for pickup',
 };
 
 const ActiveOrderScreen = ({ navigation, route }: any) => {
@@ -45,8 +45,9 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState('');
-  const [riderLocation, setRiderLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [riderLocation, setRiderLocation] = useState<{ lat: number; lng: number; heading?: number | null } | null>(null);
   const locationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const locationSubRef = useRef<Location.LocationSubscription | null>(null);
 
   // Always load the latest persisted state for the active delivery (passed params can be stale)
   const fetchOrder = useCallback(async () => {
@@ -84,7 +85,11 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
     const onCancelled = (data: any) => {
       if (String(data?.orderId) !== orderId) return;
       if (locationInterval.current) clearInterval(locationInterval.current);
-      Alert.alert('❌ Order Cancelled', 'This order was cancelled. You are free to accept other orders.', [
+      if (locationSubRef.current) {
+        locationSubRef.current.remove();
+        locationSubRef.current = null;
+      }
+      Alert.alert('Order Cancelled', 'This order was cancelled. You are free to accept other orders.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     };
@@ -98,34 +103,56 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
     };
   }, [isReadOnly, order?._id, navigation]);
 
-  // Live location tracking for rider
+  // Live location tracking for rider (watchPositionAsync + fallback interval)
   useEffect(() => {
     if (isReadOnly || order?.status === 'delivered') return;
+    let isMounted = true;
+
+    const pushCoords = (coords: Location.LocationObjectCoords) => {
+      if (!isMounted) return;
+      const { latitude, longitude, heading, speed } = coords;
+      setRiderLocation({ lat: latitude, lng: longitude, heading: heading ?? null });
+      if (order?._id) {
+        emitLocationUpdate(latitude, longitude, order._id, heading ?? null, speed ?? null);
+      } else {
+        emitLocationUpdate(latitude, longitude, undefined, heading ?? null, speed ?? null);
+      }
+    };
+
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      if (status !== 'granted' || !isMounted) return;
       try {
-        const loc = await Location.getCurrentPositionAsync({});
-        setRiderLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-        if (order?._id) {
-          emitLocationUpdate(loc.coords.latitude, loc.coords.longitude, order._id);
-        }
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        pushCoords(loc.coords);
       } catch {}
+
+      try {
+        locationSubRef.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 3000,
+            distanceInterval: 4,
+          },
+          (loc) => pushCoords(loc.coords),
+        );
+      } catch {}
+
       locationInterval.current = setInterval(async () => {
         try {
-          const loc = await Location.getCurrentPositionAsync({});
-          const { latitude, longitude } = loc.coords;
-          setRiderLocation({ lat: latitude, lng: longitude });
-          if (order?._id) {
-            emitLocationUpdate(latitude, longitude, order._id);
-          } else {
-            emitLocationUpdate(latitude, longitude);
-          }
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          pushCoords(loc.coords);
         } catch {}
-      }, 4000);
+      }, 5000);
     })();
+
     return () => {
+      isMounted = false;
       if (locationInterval.current) clearInterval(locationInterval.current);
+      if (locationSubRef.current) {
+        locationSubRef.current.remove();
+        locationSubRef.current = null;
+      }
     };
   }, [isReadOnly, order?._id, order?.status]);
 
@@ -140,7 +167,7 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
         setOrder((prev) => (prev ? { ...prev, status: data.order.status, deliveryStatus: data.order.deliveryStatus } : prev));
       }
       Alert.alert(
-        '✅ Status Updated',
+        'Status Updated',
         nextStatus === 'picked_up' ? 'Order picked up. The customer has been notified.' : 'Restaurant notified that you have arrived.',
       );
     } catch (err: any) {
@@ -164,11 +191,15 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
         clearInterval(locationInterval.current);
         locationInterval.current = null;
       }
+      if (locationSubRef.current) {
+        locationSubRef.current.remove();
+        locationSubRef.current = null;
+      }
       setShowOTPModal(false);
       setOrder((prev) => (prev ? { ...prev, status: 'delivered', deliveryStatus: 'delivered' } : prev));
       const earned = data?.payout || order.payout || order.riderPayout || order.deliveryFee || 30;
       Alert.alert(
-        '🎉 Delivered!',
+        'Order Delivered',
         data?.alreadyDelivered
           ? 'This order was already marked delivered.'
           : `Order delivered successfully!\n₹${earned} has been added to your earnings & wallet!`,
@@ -263,6 +294,14 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
           dropLabel={customerName}
           riderLat={riderLocation?.lat}
           riderLng={riderLocation?.lng}
+          riderHeading={riderLocation?.heading}
+          deliveryStage={
+            deliveryStep === 'delivered'
+              ? 'delivered'
+              : deliveryStep === 'picked_up'
+              ? 'to_customer'
+              : 'to_restaurant'
+          }
         />
 
         {/* Back button overlay */}
@@ -321,7 +360,12 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
           </View>
           <View style={styles.customerInfo}>
             <Text style={styles.customerLabel}>Customer: {customerName}</Text>
-            {customerPhone && <Text style={styles.customerPhone}>📱 {customerPhone}</Text>}
+            {customerPhone && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <Ionicons name="call-outline" size={13} color="#6B7280" />
+                <Text style={styles.customerPhone}>{customerPhone}</Text>
+              </View>
+            )}
           </View>
           <TouchableOpacity style={styles.callBtn} onPress={() => callCustomer(customerPhone)}>
             <Ionicons name="call" size={20} color="#fff" />
@@ -342,9 +386,12 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
                 : order.paymentMethod ? String(order.paymentMethod).toUpperCase()
                 : 'Cash on Delivery (COD)'}
             </Text>
-            <Text style={{ fontSize: 13, color: '#16A34A', fontWeight: '700', marginTop: 3 }}>
-              🛵 Delivery Fee (Your Earning): ₹{order.payout || order.riderPayout || order.deliveryFee || 30}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
+              <Ionicons name="bicycle-outline" size={14} color="#16A34A" />
+              <Text style={{ fontSize: 13, color: '#16A34A', fontWeight: '700' }}>
+                Delivery Fee (Your Earning): ₹{order.payout || order.riderPayout || order.deliveryFee || 30}
+              </Text>
+            </View>
           </View>
           <Text style={styles.paymentAmt}>₹{order.totalAmount || order.total || 0}</Text>
         </View>
@@ -352,8 +399,13 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
         <View style={styles.divider} />
 
         {!isReadOnly && kitchenHint ? (
-          <View style={[styles.kitchenBanner, order.status === 'ready' && styles.kitchenBannerReady]}>
-            <Text style={[styles.kitchenBannerText, order.status === 'ready' && styles.kitchenBannerTextReady]}>
+          <View style={[styles.kitchenBanner, order.status === 'ready' && styles.kitchenBannerReady, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+            <Ionicons
+              name={order.status === 'ready' ? 'checkmark-circle' : 'restaurant-outline'}
+              size={18}
+              color={order.status === 'ready' ? '#166534' : '#92400E'}
+            />
+            <Text style={[styles.kitchenBannerText, order.status === 'ready' && styles.kitchenBannerTextReady, { flex: 1 }]}>
               {kitchenHint}
             </Text>
           </View>
@@ -397,7 +449,7 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
               ? <ActivityIndicator color="#fff" />
               : <>
                   <Ionicons name={currentStep.icon as any} size={20} color="#fff" />
-                  <Text style={styles.actionBtnText}>← {currentStep.label}</Text>
+                  <Text style={styles.actionBtnText}>{currentStep.label}</Text>
                 </>
             }
           </TouchableOpacity>
@@ -406,7 +458,7 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
         {!isReadOnly && order.status === 'delivered' && (
           <View style={styles.deliveredBanner}>
             <Ionicons name="checkmark-circle" size={28} color="#22C55E" />
-            <Text style={styles.deliveredText}>Order Delivered Successfully! 🎉</Text>
+            <Text style={styles.deliveredText}>Order Delivered Successfully!</Text>
           </View>
         )}
 

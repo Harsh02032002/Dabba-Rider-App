@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Android build caches (keep android/ source files for GitHub Actions APK builds)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+.cxx/
+*.hprof
+*.iml
+
+# Logs & OS
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+Thumbs.db
