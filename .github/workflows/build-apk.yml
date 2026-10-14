@@ -64,6 +64,10 @@ jobs:
           rm -f android/local.properties
           sed -i 's/\r$//' android/gradlew
           chmod +x android/gradlew
+          # Grant executable permissions to Hermes compiler and binaries
+          chmod -R +x node_modules/react-native/sdks/hermesc/ || true
+          find node_modules/ -type f -name "hermesc*" -exec chmod +x {} + 2>/dev/null || true
+          find node_modules/.bin -type f -exec chmod +x {} + 2>/dev/null || true
 
       - name: Build Release APK with Gradle
         working-directory: android
