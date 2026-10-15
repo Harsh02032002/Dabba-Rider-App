@@ -3,14 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+// Local backend port (override with EXPO_PUBLIC_API_PORT, e.g. to point at a demo backend)
+const API_PORT = process.env.EXPO_PUBLIC_API_PORT || '5000';
+
 const getBaseUrl = () => {
   if (Platform.OS === 'web') {
-    return 'http://localhost:5000';
+    return `http://localhost:${API_PORT}`;
   }
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     const ip = hostUri.split(':')[0];
-    return `http://${ip}:5000`;
+    return `http://${ip}:${API_PORT}`;
   }
   return 'https://dabbanation.in';
 };

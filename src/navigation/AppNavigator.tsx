@@ -6,6 +6,8 @@ import { View, ActivityIndicator, StyleSheet, Platform, Text } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { theme } from '../theme/colors';
+import { colors } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
@@ -19,46 +21,44 @@ import KycVerificationScreen from '../screens/KycVerificationScreen';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const HomeTabs = () => (
-  <Tab.Navigator
-    screenOptions={({ route }) => ({
-      tabBarIcon: ({ focused, color, size }) => {
-        let iconName: any;
-        if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
-        else if (route.name === 'Orders') iconName = focused ? 'cube' : 'cube-outline';
-        else if (route.name === 'Earnings') iconName = focused ? 'wallet' : 'wallet-outline';
-        else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
-        return <Ionicons name={iconName} size={size} color={color} />;
-      },
-      tabBarActiveTintColor: theme.primary,
-      tabBarInactiveTintColor: '#9CA3AF',
-      tabBarStyle: {
-        backgroundColor: '#fff',
-        borderTopWidth: 1,
-        borderTopColor: '#F3F4F6',
-        height: Platform.OS === 'ios' ? 88 : 68,
-        paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-        paddingTop: 10,
-        elevation: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-      },
-      tabBarLabelStyle: {
-        fontSize: 11,
-        fontWeight: '700',
-        marginBottom: 0,
-      },
-      headerShown: false,
-    })}
-  >
-    <Tab.Screen name="Home" component={DashboardScreen} options={{ title: 'Home' }} />
-    <Tab.Screen name="Orders" component={OrdersScreen} options={{ title: 'Orders' }} />
-    <Tab.Screen name="Earnings" component={EarningsScreen} options={{ title: 'Earnings' }} />
-    <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
-  </Tab.Navigator>
-);
+const TAB_ICONS: Record<string, [string, string]> = {
+  Home: ['home', 'home-outline'],
+  Orders: ['list', 'list-outline'],
+  Earnings: ['wallet', 'wallet-outline'],
+  Profile: ['person-circle', 'person-circle-outline'],
+};
+
+const HomeTabs = () => {
+  const insets = useSafeAreaInsets();
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color }) => {
+          const [active, inactive] = TAB_ICONS[route.name] || ['ellipse', 'ellipse-outline'];
+          return <Ionicons name={(focused ? active : inactive) as any} size={24} color={color} />;
+        },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textTertiary,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.border,
+          height: 60 + Math.max(insets.bottom, 8),
+          paddingBottom: Math.max(insets.bottom, 8),
+          paddingTop: 6,
+          elevation: 0,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        headerShown: false,
+      })}
+    >
+      <Tab.Screen name="Home" component={DashboardScreen} options={{ title: 'Home' }} />
+      <Tab.Screen name="Orders" component={OrdersScreen} options={{ title: 'Orders' }} />
+      <Tab.Screen name="Earnings" component={EarningsScreen} options={{ title: 'Earnings' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+    </Tab.Navigator>
+  );
+};
 
 const AppNavigator = () => {
   const { isAuthenticated, loading } = useAuth();
@@ -66,7 +66,7 @@ const AppNavigator = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }

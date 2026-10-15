@@ -1,6 +1,6 @@
 // Theme constants matching the web app's index.css
 export const Colors = {
-  background: '#FAF8F0',
+  background: '#FAF8F3',
   foreground: '#171B26',
   card: '#FFFFFF',
   cardForeground: '#171B26',

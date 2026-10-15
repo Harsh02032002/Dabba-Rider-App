@@ -472,14 +472,15 @@ if (document.readyState === 'complete') {
   return (
     <View style={[{ width: '100%', height: resolvedHeight, backgroundColor: '#E8EFF5' }, style]}>
       {status === 'loading' && (
-        <View style={[StyleSheet.absoluteFillObject, styles.loaderOverlay]} pointerEvents="none">
+        <View style={[StyleSheet.absoluteFill, styles.loaderOverlay]} pointerEvents="none">
           <ActivityIndicator size="large" color="#FF6B00" />
           <Text style={styles.loaderText}>Loading live map...</Text>
         </View>
       )}
 
       {status === 'error' && (
-        <View style={[StyleSheet.absoluteFillObject, styles.errorOverlay]}>
+        <View style={[StyleSheet.absoluteFill, styles.errorOverlay]}>
+          <Text style={styles.errorIcon}>🗺️</Text>
           <Text style={styles.errorTitle}>Map unavailable</Text>
           <Text style={styles.errorDesc}>Check your internet connection</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={reload}>

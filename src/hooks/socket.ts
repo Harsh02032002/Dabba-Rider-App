@@ -2,10 +2,13 @@ import { io, Socket } from 'socket.io-client';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+// Local backend port (override with EXPO_PUBLIC_API_PORT, e.g. to point at a demo backend)
+const API_PORT = process.env.EXPO_PUBLIC_API_PORT || '5000';
+
 const getSocketConfig = () => {
   if (Platform.OS === 'web') {
     return {
-      url: 'http://localhost:5000',
+      url: `http://localhost:${API_PORT}`,
       path: '/socket.io',
     };
   }
@@ -13,7 +16,7 @@ const getSocketConfig = () => {
   if (hostUri) {
     const ip = hostUri.split(':')[0];
     return {
-      url: `http://${ip}:5000`,
+      url: `http://${ip}:${API_PORT}`,
       path: '/socket.io',
     };
   }

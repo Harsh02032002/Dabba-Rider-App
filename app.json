@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FDFCF7"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.harsh02032002.dabbanationdelivery",
@@ -40,7 +35,18 @@
     },
     "plugins": [
       "expo-location",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-font",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FDFCF7",
+          "imageWidth": 200
+        }
+      ]
     ],
     "extra": {
       "eas": {
