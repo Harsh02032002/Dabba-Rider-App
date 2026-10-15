@@ -168,8 +168,7 @@ const EarningsScreen = ({ navigation }: any) => {
                       styles.barFill,
                       {
                         height: `${Math.max((val / maxWeekly) * 100, 4)}%`,
-                        backgroundColor: idx === new Date().getDay() === 0 ? 6 : (new Date().getDay() + 6) % 7 === idx
-                          ? theme.primary : '#FFD4B2',
+                        backgroundColor: idx === ((new Date().getDay() + 6) % 7) ? theme.primary : '#FFD4B2',
                       },
                     ]}
                   />

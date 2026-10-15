@@ -14,6 +14,7 @@ import ActiveOrderScreen from '../screens/ActiveOrderScreen';
 import EarningsScreen from '../screens/EarningsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import OrdersScreen from '../screens/OrdersScreen';
+import KycVerificationScreen from '../screens/KycVerificationScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -81,12 +82,9 @@ const AppNavigator = () => {
         ) : (
           <>
             <Stack.Screen name="Main" component={HomeTabs} />
-            <Stack.Screen
-              name="ActiveOrder"
-              component={ActiveOrderScreen}
-              options={{ animation: 'slide_from_bottom' }}
-            />
-            <Stack.Screen name="Profile" component={ProfileScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="ActiveOrder" component={ActiveOrderScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
+            <Stack.Screen name="KycVerification" component={KycVerificationScreen} />
           </>
         )}
       </Stack.Navigator>

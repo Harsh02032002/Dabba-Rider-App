@@ -31,6 +31,10 @@ export default function OrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [kycInfo, setKycInfo] = useState<{ kycStatus: string; isApproved: boolean }>({
+    kycStatus: 'pending',
+    isApproved: true,
+  });
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -38,6 +42,12 @@ export default function OrdersScreen() {
       if (res.data?.success) {
         setOrders(res.data.orders || []);
         if (res.data.maxActiveOrders) setMaxActiveOrders(res.data.maxActiveOrders);
+        if (res.data.kycStatus !== undefined) {
+          setKycInfo({
+            kycStatus: res.data.kycStatus,
+            isApproved: res.data.isApproved ?? (res.data.kycStatus === 'verified'),
+          });
+        }
         setError(null);
       }
     } catch (err: any) {
@@ -236,6 +246,37 @@ export default function OrdersScreen() {
         </Text>
       </View>
 
+      {!kycInfo.isApproved && (
+        <TouchableOpacity
+          style={styles.kycWarningBanner}
+          onPress={() => navigation.navigate('KycVerification')}
+          activeOpacity={0.85}
+        >
+          <Ionicons
+            name={kycInfo.kycStatus === 'submitted' ? 'time' : 'alert-circle'}
+            size={20}
+            color={kycInfo.kycStatus === 'submitted' ? '#B45309' : '#DC2626'}
+          />
+          <View style={{ flex: 1, marginLeft: 8 }}>
+            <Text style={styles.kycWarningTitle}>
+              {kycInfo.kycStatus === 'submitted'
+                ? 'KYC Under Admin Review'
+                : 'KYC Document Verification Required'}
+            </Text>
+            <Text style={styles.kycWarningDesc}>
+              {kycInfo.kycStatus === 'submitted'
+                ? 'Admin approval ke baad orders accept karne ki permission milegi.'
+                : 'PAN & Aadhaar upload karke account active karein.'}
+            </Text>
+          </View>
+          <View style={styles.kycWarningBtn}>
+            <Text style={styles.kycWarningBtnText}>
+              {kycInfo.kycStatus === 'submitted' ? 'Check' : 'Verify'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
       {error ? (
         <View style={styles.errorBanner}>
           <Ionicons name="cloud-offline-outline" size={16} color="#B91C1C" />
@@ -266,23 +307,44 @@ export default function OrdersScreen() {
             />
           }
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="bicycle-outline" size={64} color="#D1D5DB" />
-              <Text style={styles.emptyTitle}>No Orders Available</Text>
-              <Text style={styles.emptySubtitle}>
-                New orders in Chandigarh will appear here automatically. Keep the app open!
-              </Text>
-              <TouchableOpacity
-                style={styles.refreshBtn}
-                onPress={() => {
-                  setLoading(true);
-                  fetchOrders();
-                }}
-              >
-                <Ionicons name="refresh" size={16} color={theme.primary} />
-                <Text style={styles.refreshBtnText}>Check Again</Text>
-              </TouchableOpacity>
-            </View>
+            !kycInfo.isApproved ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="lock-closed-outline" size={64} color="#9CA3AF" />
+                <Text style={styles.emptyTitle}>Orders Locked</Text>
+                <Text style={styles.emptySubtitle}>
+                  {kycInfo.kycStatus === 'submitted'
+                    ? 'Aapka KYC application admin verification ke liye review me hai. Approval milne par orders unlock ho jayenge.'
+                    : 'Orders dekhne aur accept karne ke liye KYC document verification zaroori hai.'}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.refreshBtn, { backgroundColor: theme.primary, borderColor: theme.primary }]}
+                  onPress={() => navigation.navigate('KycVerification')}
+                >
+                  <Ionicons name="shield-checkmark" size={16} color="#fff" />
+                  <Text style={[styles.refreshBtnText, { color: '#fff' }]}>
+                    {kycInfo.kycStatus === 'submitted' ? 'Check KYC Status' : 'Complete KYC Verification'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="bicycle-outline" size={64} color="#D1D5DB" />
+                <Text style={styles.emptyTitle}>No Orders Available</Text>
+                <Text style={styles.emptySubtitle}>
+                  New orders in your zone will appear here automatically. Keep the app open!
+                </Text>
+                <TouchableOpacity
+                  style={styles.refreshBtn}
+                  onPress={() => {
+                    setLoading(true);
+                    fetchOrders();
+                  }}
+                >
+                  <Ionicons name="refresh" size={16} color={theme.primary} />
+                  <Text style={styles.refreshBtnText}>Check Again</Text>
+                </TouchableOpacity>
+              </View>
+            )
           }
         />
       )}
@@ -560,5 +622,38 @@ const styles = StyleSheet.create({
     color: theme.primary,
     fontWeight: '700',
     fontSize: 13,
+  },
+  kycWarningBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  kycWarningTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  kycWarningDesc: {
+    fontSize: 11,
+    color: '#7F1D1D',
+    marginTop: 2,
+  },
+  kycWarningBtn: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  kycWarningBtnText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

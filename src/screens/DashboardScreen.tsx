@@ -6,7 +6,14 @@ import {
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { toggleOnline, getCurrentOrder, getOrderHistory, getEarnings } from '../api/api';
+import {
+  toggleOnline,
+  getCurrentOrder,
+  getOrderHistory,
+  getEarnings,
+  getAvailableOrders,
+  getKycStatus,
+} from '../api/api';
 import {
   getSocket, emitPartnerOnline, emitPartnerOffline, emitLocationUpdate,
 } from '../hooks/socket';
@@ -24,6 +31,12 @@ const DashboardScreen = ({ navigation }: any) => {
   const [incomingOrder, setIncomingOrder] = useState<IncomingOrderRequest | null>(null);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+  const [availableOrders, setAvailableOrders] = useState<any[]>([]);
+  const [kycInfo, setKycInfo] = useState<{ kycStatus: string; isApproved: boolean; rejectReason?: string | null }>({
+    kycStatus: partner?.kycStatus || 'pending',
+    isApproved: !!partner?.isApproved,
+    rejectReason: partner?.kycRejectReason || null,
+  });
   const [todayEarnings, setTodayEarnings] = useState(0);
   const [completedToday, setCompletedToday] = useState(0);
   const [totalCompleted, setTotalCompleted] = useState(0);
@@ -35,14 +48,23 @@ const DashboardScreen = ({ navigation }: any) => {
 
   useEffect(() => {
     if (partner?.isOnline !== undefined) setIsOnline(partner.isOnline);
+    if (partner?.kycStatus) {
+      setKycInfo((prev) => ({
+        ...prev,
+        kycStatus: partner.kycStatus || prev.kycStatus,
+        isApproved: !!partner.isApproved,
+      }));
+    }
   }, [partner]);
 
   const fetchData = useCallback(async () => {
     try {
-      const [orderRes, historyRes, earningsRes] = await Promise.allSettled([
+      const [orderRes, historyRes, earningsRes, availableRes, kycRes] = await Promise.allSettled([
         getCurrentOrder(),
         getOrderHistory(),
         getEarnings(),
+        getAvailableOrders(),
+        getKycStatus(),
       ]);
 
       if (orderRes.status === 'fulfilled' && orderRes.value.data?.order) {
@@ -71,13 +93,30 @@ const DashboardScreen = ({ navigation }: any) => {
           setTodayEarnings(data.todayEarnings);
         }
       }
+
+      if (availableRes.status === 'fulfilled' && availableRes.value.data?.orders) {
+        setAvailableOrders(availableRes.value.data.orders.slice(0, 3));
+      }
+
+      if (kycRes.status === 'fulfilled' && kycRes.value.data?.success) {
+        const kData = kycRes.value.data;
+        setKycInfo({
+          kycStatus: kData.kycStatus || 'pending',
+          isApproved: !!kData.isApproved,
+          rejectReason: kData.kycRejectReason || null,
+        });
+        updatePartner({
+          kycStatus: kData.kycStatus,
+          isApproved: !!kData.isApproved,
+        });
+      }
     } catch (e) {
       console.log('Fetch error:', e);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [updatePartner]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
   // Re-sync when coming back from ActiveOrder / Orders (accept, pickup, delivery)
@@ -188,6 +227,20 @@ const DashboardScreen = ({ navigation }: any) => {
   }, []);
 
   const handleToggleOnline = async () => {
+    if (!kycInfo.isApproved || kycInfo.kycStatus !== 'verified') {
+      Alert.alert(
+        'KYC Verification Required',
+        kycInfo.kycStatus === 'submitted'
+          ? 'Aapke KYC documents review me hain. Admin approval ke baad aap online ja sakte hain.'
+          : 'Online jaane ke liye pehle KYC verification complete karein (PAN & Aadhaar zaroori hain).',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Verify Now', onPress: () => navigation.navigate('KycVerification') },
+        ]
+      );
+      return;
+    }
+
     setToggling(true);
     try {
       let coords: any = {};
@@ -213,8 +266,12 @@ const DashboardScreen = ({ navigation }: any) => {
       await updatePartner({ isOnline: newStatus });
       if (newStatus) { emitPartnerOnline(); startLocationTracking(); }
       else { emitPartnerOffline(); stopLocationTracking(); }
-    } catch {
-      Alert.alert('Error', 'Failed to toggle status. Check internet connection.');
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Failed to toggle status. Check internet connection.';
+      Alert.alert('Notice', msg, [
+        { text: 'OK' },
+        ...(!kycInfo.isApproved ? [{ text: 'Upload KYC', onPress: () => navigation.navigate('KycVerification') }] : [])
+      ]);
     } finally {
       setToggling(false);
     }
@@ -295,6 +352,75 @@ const DashboardScreen = ({ navigation }: any) => {
           )}
         </View>
 
+        {/* KYC Status Banner */}
+        {(!kycInfo.isApproved || kycInfo.kycStatus !== 'verified') && (
+          <TouchableOpacity
+            style={[
+              styles.dashboardKycBanner,
+              kycInfo.kycStatus === 'submitted'
+                ? styles.dashboardKycSubmitted
+                : kycInfo.kycStatus === 'rejected'
+                ? styles.dashboardKycRejected
+                : styles.dashboardKycPending,
+            ]}
+            onPress={() => navigation.navigate('KycVerification')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.dashboardKycIcon}>
+              <Ionicons
+                name={
+                  kycInfo.kycStatus === 'submitted'
+                    ? 'time'
+                    : kycInfo.kycStatus === 'rejected'
+                    ? 'alert-circle'
+                    : 'shield-outline'
+                }
+                size={24}
+                color={
+                  kycInfo.kycStatus === 'submitted'
+                    ? '#B45309'
+                    : kycInfo.kycStatus === 'rejected'
+                    ? '#B91C1C'
+                    : '#1D4ED8'
+                }
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[
+                  styles.dashboardKycTitle,
+                  {
+                    color:
+                      kycInfo.kycStatus === 'submitted'
+                        ? '#92400E'
+                        : kycInfo.kycStatus === 'rejected'
+                        ? '#991B1B'
+                        : '#1E40AF',
+                  },
+                ]}
+              >
+                {kycInfo.kycStatus === 'submitted'
+                  ? 'Verification Under Review'
+                  : kycInfo.kycStatus === 'rejected'
+                  ? 'KYC Verification Rejected'
+                  : 'KYC Document Verification Required'}
+              </Text>
+              <Text style={styles.dashboardKycDesc}>
+                {kycInfo.kycStatus === 'submitted'
+                  ? 'Admin review chal raha hai. Approval ke baad orders unlock honge.'
+                  : kycInfo.kycStatus === 'rejected'
+                  ? 'Documents reject ho gaye hain. Tap karke dobara upload karein.'
+                  : 'PAN aur Aadhaar card upload karke account active karein.'}
+              </Text>
+            </View>
+            <View style={styles.kycActionBtn}>
+              <Text style={styles.kycActionBtnText}>
+                {kycInfo.kycStatus === 'submitted' ? 'View' : 'Upload'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Stats Cards */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
@@ -314,6 +440,96 @@ const DashboardScreen = ({ navigation }: any) => {
             <Text style={styles.statLabel}>Completed Deliveries</Text>
             <Text style={styles.statSub}>{completedToday} deliveries today</Text>
           </View>
+        </View>
+
+        {/* Available Orders Section (2-3 orders on dashboard) */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="cube" size={20} color={theme.primary} />
+              <Text style={styles.sectionTitle}>Available Orders</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('Orders')}>
+              <Text style={styles.viewAll}>View All →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {!kycInfo.isApproved ? (
+            <View style={styles.kycOrderLockCard}>
+              <Ionicons name="lock-closed" size={32} color="#9CA3AF" />
+              <Text style={styles.kycLockTitle}>Orders Locked</Text>
+              <Text style={styles.kycLockSubtitle}>
+                {kycInfo.kycStatus === 'submitted'
+                  ? 'Aapke KYC documents review me hain. Admin approval ke baad orders unlock honge.'
+                  : 'Orders dekhne aur accept karne ke liye KYC document verification complete karein.'}
+              </Text>
+              {kycInfo.kycStatus !== 'submitted' && (
+                <TouchableOpacity
+                  style={styles.kycLockBtn}
+                  onPress={() => navigation.navigate('KycVerification')}
+                >
+                  <Text style={styles.kycLockBtnText}>Upload Documents</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : availableOrders.length > 0 ? (
+            availableOrders.map((ord, idx) => (
+              <TouchableOpacity
+                key={ord._id || idx}
+                style={styles.availableOrderCard}
+                onPress={() => navigation.navigate('Orders')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.availableOrderTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.availableRestaurantName} numberOfLines={1}>
+                      {ord.sellerId?.businessName || ord.restaurantName || 'Restaurant Partner'}
+                    </Text>
+                    <Text style={styles.availableOrderSub} numberOfLines={1}>
+                      Order #{ord.orderNumber || ord._id?.slice(-4)} • {ord.items?.length || 1} item(s)
+                    </Text>
+                  </View>
+                  <View style={styles.payoutBadge}>
+                    <Text style={styles.payoutBadgeText}>₹{ord.riderPayout || ord.payout || 35}</Text>
+                    <Text style={styles.payoutSubText}>Earnings</Text>
+                  </View>
+                </View>
+
+                <View style={styles.availableOrderLocations}>
+                  <View style={styles.locationLine}>
+                    <Ionicons name="restaurant-outline" size={14} color="#EA580C" />
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      {ord.pickupAddress || 'Pickup Restaurant'}
+                    </Text>
+                  </View>
+                  <View style={styles.locationLine}>
+                    <Ionicons name="location-outline" size={14} color="#2563EB" />
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      {typeof ord.deliveryAddress === 'string'
+                        ? ord.deliveryAddress
+                        : ord.deliveryAddress?.fullAddress || ord.deliveryAddress?.street || 'Customer Location'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.availableOrderFooter}>
+                  <Text style={styles.distanceText}>📍 ~{ord.deliveryDistanceKm || 2.5} km delivery</Text>
+                  <View style={styles.viewOrderPill}>
+                    <Text style={styles.viewOrderPillText}>Accept / View</Text>
+                    <Ionicons name="arrow-forward" size={12} color="#fff" />
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.noOrderCard}>
+              <Ionicons name="bicycle-outline" size={36} color="#D1D5DB" />
+              <Text style={styles.noOrderTitle}>No Orders Nearby</Text>
+              <Text style={styles.noOrderDesc}>
+                {isOnline ? 'Checking for new orders in your zone...' : 'Go online to receive nearby delivery requests'}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Active Order */}
@@ -415,11 +631,11 @@ const DashboardScreen = ({ navigation }: any) => {
           </View>
         )}
 
-        {/* Recent Orders */}
+        {/* Recent Deliveries */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Deliveries</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Earnings')}>
+            <TouchableOpacity onPress={() => navigation.navigate('Orders')}>
               <Text style={styles.viewAll}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -613,6 +829,191 @@ const styles = StyleSheet.create({
   },
   totalLeft: { fontSize: 12, color: '#6B7280', fontWeight: '600' },
   totalRight: { fontSize: 12, color: '#6B7280', fontWeight: '600' },
+
+  // Dashboard KYC Banner
+  dashboardKycBanner: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  dashboardKycSubmitted: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  dashboardKycRejected: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  dashboardKycPending: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  dashboardKycIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dashboardKycTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  dashboardKycDesc: {
+    fontSize: 12,
+    color: '#4B5563',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  kycActionBtn: {
+    backgroundColor: theme.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  kycActionBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // KYC Order Lock Card
+  kycOrderLockCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  kycLockTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#374151',
+    marginTop: 8,
+  },
+  kycLockSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  kycLockBtn: {
+    marginTop: 14,
+    backgroundColor: theme.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  kycLockBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // Available Order Cards
+  availableOrderCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  availableOrderTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  availableRestaurantName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  availableOrderSub: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  payoutBadge: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  payoutBadgeText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  payoutSubText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  availableOrderLocations: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 10,
+    gap: 6,
+    marginBottom: 10,
+  },
+  locationLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  locationText: {
+    fontSize: 12,
+    color: '#374151',
+    flex: 1,
+  },
+  availableOrderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  distanceText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  viewOrderPill: {
+    backgroundColor: theme.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  viewOrderPillText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
 });
 
 export default DashboardScreen;

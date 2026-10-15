@@ -10,6 +10,14 @@ export interface DeliveryPartner {
   email: string;
   isApproved: boolean;
   isOnline: boolean;
+  kycStatus?: 'pending' | 'submitted' | 'verified' | 'rejected';
+  kycRejectReason?: string;
+  kycDocuments?: {
+    aadhaar?: { number?: string; url?: string; status?: string };
+    pan?: { number?: string; url?: string; status?: string };
+    drivingLicense?: { number?: string; url?: string; status?: string };
+    vehicleRC?: { number?: string; url?: string; status?: string };
+  };
   currentLocation: GeoPoint;
   vehicleType: 'bike' | 'scooter' | 'car';
   earnings: number;

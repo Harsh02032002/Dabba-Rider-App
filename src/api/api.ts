@@ -109,4 +109,23 @@ export const confirmDeliveryOTP = (orderId: string, otp: string) =>
 export const requestWithdrawal = (amount: number) =>
   api.post('/api/partner/withdraw', { amount });
 
+// KYC Verification
+export const getKycStatus = () => api.get('/api/partner/kyc');
+
+export const uploadKycDocument = (formData: FormData) =>
+  api.post('/api/partner/kyc/document', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+
+export const submitKycDocuments = (data: {
+  aadhaarNumber: string;
+  aadhaarUrl: string;
+  panNumber: string;
+  panUrl: string;
+  drivingLicenseNumber?: string;
+  drivingLicenseUrl?: string;
+  vehicleRCNumber?: string;
+  vehicleRCUrl?: string;
+}) => api.post('/api/partner/kyc/submit', data);
+
 export default api;

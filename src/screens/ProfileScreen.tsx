@@ -18,7 +18,14 @@ const ProfileScreen = ({ navigation }: any) => {
   };
 
   const menuItems = [
-    { icon: 'document-text-outline', label: 'Documents & Verification', color: '#6366f1' },
+    {
+      icon: 'document-text-outline',
+      label: 'Documents & Verification',
+      color: '#6366f1',
+      badge: partner?.isApproved ? 'Verified' : partner?.kycStatus === 'submitted' ? 'Review' : 'Pending',
+      badgeColor: partner?.isApproved ? '#16A34A' : partner?.kycStatus === 'submitted' ? '#D97706' : '#EF4444',
+      action: () => navigation.navigate('KycVerification'),
+    },
     { icon: 'help-circle-outline', label: 'Help & Support', color: '#f59e0b', action: () => setShowSupport(true) },
     { icon: 'language-outline', label: `Language: ${language}`, color: '#10b981', action: () => setShowLang(true) },
     { icon: 'shield-checkmark-outline', label: 'Terms & Conditions', color: '#64748b' },
@@ -94,7 +101,14 @@ const ProfileScreen = ({ navigation }: any) => {
                   </View>
                   <Text style={styles.menuText}>{item.label}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {item.badge && (
+                    <View style={{ backgroundColor: item.badgeColor + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: item.badgeColor }}>{item.badge}</Text>
+                    </View>
+                  )}
+                  <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
+                </View>
               </TouchableOpacity>
             ))}
           </View>
