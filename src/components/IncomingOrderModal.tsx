@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View, Text, TouchableOpacity, StyleSheet, Modal, Dimensions, Image, ActivityIndicator, Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, Modal, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { IncomingOrderRequest, Order } from '../types';
 import { acceptOrder as acceptOrderAPI } from '../api/api';
 import { emitAcceptOrder, emitRejectOrder } from '../hooks/socket';
-import { theme } from '../theme/colors';
+import { colors, formatMoney, radius, spacing, type } from '../theme';
+import { Button } from './ui';
 
 interface Props {
   orderRequest: IncomingOrderRequest;
@@ -14,7 +13,6 @@ interface Props {
   onAccepted: (order: Order) => void;
 }
 
-const { width } = Dimensions.get('window');
 
 const IncomingOrderModal: React.FC<Props> = ({ orderRequest, onClose, onAccepted }) => {
   const { order, timeout } = orderRequest;
@@ -56,100 +54,71 @@ const IncomingOrderModal: React.FC<Props> = ({ orderRequest, onClose, onAccepted
     onClose();
   }, [order._id, onClose]);
 
-  const progress = (timeLeft / timeout) * 100;
+  const progress = Math.max(0, Math.min(100, (timeLeft / timeout) * 100));
+  const payout = (order as any).deliveryFee ?? (order as any).riderPayout;
+  const distance = order.distance != null && order.distance !== ('' as any) ? `${order.distance} km` : '—';
+  const urgent = timeLeft <= 10;
 
   return (
-    <Modal visible transparent animationType="fade">
+    <Modal visible transparent animationType="slide" onRequestClose={handleReject}>
       <View style={styles.overlay}>
         <View style={styles.card}>
-          {/* Timer bar */}
-          <View style={styles.timerContainer}>
-            <View style={[styles.timerFill, { width: `${progress}%` }]} />
+          <View style={styles.timerTrack}>
+            <View style={[styles.timerFill, { width: `${progress}%` }, urgent && { backgroundColor: colors.danger }]} />
           </View>
 
           <View style={styles.content}>
-            {/* Header with Logo */}
             <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                <Image 
-                  source={require('../../assets/icon.png')} 
-                  style={styles.logo}
-                  resizeMode="contain"
-                />
-                <View>
-                  <Text style={styles.brandName}>Dabba <Text style={{ color: theme.primary }}>Nation</Text></Text>
-                  <Text style={styles.title}>New Delivery Alert!</Text>
-                </View>
+              <View style={styles.bell}>
+                <Ionicons name="notifications" size={20} color={colors.primary} />
               </View>
-              <View style={styles.timerCircle}>
-                <Text style={styles.timeLeftText}>{timeLeft}s</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={type.title}>New delivery request</Text>
+                <Text style={type.caption}>{(order as any).orderNumber ? `Order #${(order as any).orderNumber}` : 'Nearby order'}</Text>
+              </View>
+              <View style={[styles.countdown, urgent && { backgroundColor: colors.dangerSoft }]}>
+                <Text style={[styles.countdownText, urgent && { color: colors.danger }]}>{Math.max(timeLeft, 0)}s</Text>
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={styles.earnings}>
+              <View style={{ flex: 1 }}>
+                <Text style={type.overline}>You earn</Text>
+                <Text style={styles.earningsValue}>{payout != null ? formatMoney(payout) : '—'}</Text>
+              </View>
+              <View style={styles.earningsDivider} />
+              <View style={{ flex: 1 }}>
+                <Text style={type.overline}>Distance</Text>
+                <Text style={styles.earningsValue}>{distance}</Text>
+              </View>
+            </View>
 
-            {/* Route */}
-            <View style={styles.routeSection}>
+            <View style={styles.route}>
               <View style={styles.routeRow}>
-                <View style={[styles.iconCircle, { backgroundColor: '#fff5f0' }]}>
-                  <Ionicons name="restaurant-outline" size={18} color={theme.primary} />
-                </View>
-                <View style={styles.routeInfo}>
-                  <Text style={styles.routeLabel}>PICKUP</Text>
-                  <Text style={styles.routeTitle}>{order.restaurantName || 'Restaurant'}</Text>
-                  <Text style={styles.routeSub} numberOfLines={1}>{order.pickupAddress || 'Restaurant Address'}</Text>
+                <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={type.overline}>Pickup</Text>
+                  <Text style={type.subheading} numberOfLines={1}>{order.restaurantName || 'Restaurant'}</Text>
+                  <Text style={type.caption} numberOfLines={2}>{order.pickupAddress || 'Address shared after you accept'}</Text>
                 </View>
               </View>
-
               <View style={styles.routeLine} />
-
               <View style={styles.routeRow}>
-                <View style={[styles.iconCircle, { backgroundColor: '#f0f9ff' }]}>
-                  <Ionicons name="location-outline" size={18} color="#0284c7" />
-                </View>
-                <View style={styles.routeInfo}>
-                  <Text style={styles.routeLabel}>DELIVER TO</Text>
-                  <Text style={styles.routeTitle}>{order.customerName || 'Customer'}</Text>
-                  <Text style={styles.routeSub} numberOfLines={1}>{order.dropAddress || 'Customer Address'}</Text>
+                <View style={[styles.dot, { backgroundColor: colors.success }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={type.overline}>Drop area</Text>
+                  <Text style={type.subheading} numberOfLines={2}>{order.dropAddress || 'Shared after you accept'}</Text>
                 </View>
               </View>
             </View>
 
-            {/* Stats */}
-            <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <Ionicons name="wallet-outline" size={20} color="#16a34a" />
-                <View style={styles.statInfo}>
-                  <Text style={styles.statVal}>₹{order.totalAmount}</Text>
-                  <Text style={styles.statLab}>Earnings</Text>
-                </View>
-              </View>
-              <View style={styles.statCard}>
-                <Ionicons name="navigate-outline" size={20} color="#0284c7" />
-                <View style={styles.statInfo}>
-                  <Text style={styles.statVal}>{order.distance || '2.5'} km</Text>
-                  <Text style={styles.statLab}>Distance</Text>
-                </View>
-              </View>
-            </View>
+            {order.totalAmount ? (
+              <Text style={[type.caption, { marginTop: spacing.md }]}>Order value {formatMoney(order.totalAmount)}</Text>
+            ) : null}
 
-            {/* Actions */}
             <View style={styles.actions}>
-              <TouchableOpacity style={styles.rejectButton} onPress={handleReject}>
-                <Text style={styles.rejectBtnText}>Decline</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.acceptButton, accepting && { opacity: 0.8 }]}
-                onPress={handleAccept}
-                disabled={accepting}
-                activeOpacity={0.9}
-              >
-                {accepting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.acceptBtnText}>Accept Order</Text>
-                )}
-              </TouchableOpacity>
+              <Button title="Decline" variant="secondary" onPress={handleReject} disabled={accepting} style={{ flex: 1 }} />
+              <Button title="Accept order" icon="checkmark" onPress={handleAccept} loading={accepting} size="lg" style={{ flex: 2 }} />
             </View>
           </View>
         </View>
@@ -159,185 +128,23 @@ const IncomingOrderModal: React.FC<Props> = ({ orderRequest, onClose, onAccepted
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 30,
-    overflow: 'hidden',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-  },
-  timerContainer: {
-    height: 4,
-    backgroundColor: '#f1f5f9',
-  },
-  timerFill: {
-    height: '100%',
-    backgroundColor: theme.primary,
-  },
-  content: {
-    padding: 25,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logo: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  brandName: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#1e293b',
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.primary,
-  },
-  timerCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: theme.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timeLeftText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: theme.primary,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#f1f5f9',
-    marginBottom: 20,
-  },
-  routeSection: {
-    marginBottom: 25,
-  },
-  routeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 15,
-  },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  routeInfo: {
-    flex: 1,
-  },
-  routeLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#94a3b8',
-    letterSpacing: 0.5,
-  },
-  routeTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginTop: 2,
-  },
-  routeSub: {
-    fontSize: 13,
-    color: '#64748b',
-  },
-  routeLine: {
-    width: 1.5,
-    height: 20,
-    backgroundColor: '#e2e8f0',
-    marginLeft: 17,
-    marginVertical: 4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 25,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    borderRadius: 16,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  statInfo: {
-    flex: 1,
-  },
-  statVal: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1e293b',
-  },
-  statLab: {
-    fontSize: 10,
-    color: '#64748b',
-    fontWeight: '600',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  rejectButton: {
-    flex: 1,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  rejectBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  acceptButton: {
-    flex: 2,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: theme.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: theme.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  acceptBtnText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#fff',
-  },
+  overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
+  card: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden' },
+  timerTrack: { height: 4, backgroundColor: colors.surfaceMuted },
+  timerFill: { height: '100%', backgroundColor: colors.primary },
+  content: { padding: spacing.xl, paddingBottom: spacing.xxl + spacing.lg },
+  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  bell: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  countdown: { minWidth: 48, height: 32, borderRadius: radius.pill, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm },
+  countdownText: { ...type.subheading, color: colors.primary, fontVariant: ['tabular-nums'] },
+  earnings: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xl, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.successSoft },
+  earningsValue: { ...type.money, fontSize: 22, lineHeight: 28, marginTop: 2 },
+  earningsDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: colors.border, marginHorizontal: spacing.lg },
+  route: { marginTop: spacing.xl },
+  routeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  dot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
+  routeLine: { width: 2, height: 16, backgroundColor: colors.border, marginLeft: 4, marginVertical: 4 },
+  actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl },
 });
 
 export default IncomingOrderModal;
