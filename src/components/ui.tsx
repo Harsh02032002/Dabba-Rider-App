@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   stat: { flex: 1, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, gap: 2, ...elevation.card },
   statIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
 
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: colors.overlay },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.overlay },
   sheet: { marginTop: 'auto', maxHeight: '90%', backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl },
   handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginTop: spacing.sm },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.md },

@@ -278,9 +278,11 @@ export default function KycVerificationScreen({ navigation }: any) {
         </View>
       ) : (
         <ScrollView
-          style={styles.content}
-          contentContainerStyle={{ paddingBottom: 60 }}
-          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={true}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled={true}
         >
           {renderStatusBanner()}
 
@@ -524,10 +526,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+    height: '100%',
   },
-  content: {
+  scrollView: {
     flex: 1,
+    width: '100%',
+    minHeight: 0,
+  },
+  scrollContent: {
     padding: 16,
+    paddingBottom: 100,
+    flexGrow: 1,
   },
   centerContainer: {
     flex: 1,
