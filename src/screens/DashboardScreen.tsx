@@ -183,6 +183,26 @@ const DashboardScreen = ({ navigation }: any) => {
       fetchData();
     };
 
+    const handleKycApproved = (data: any) => {
+      setKycInfo({ kycStatus: 'verified', isApproved: true, rejectReason: null });
+      updatePartner({ kycStatus: 'verified', isApproved: true });
+      Alert.alert(
+        'Account Approved! 🎉',
+        'Badhaai ho! Aapka Rider account admin dwara verify aur approve ho gaya hai. Ab aap online toggle karke delivery orders accept kar sakte hain!'
+      );
+      fetchData();
+    };
+
+    const handleKycRejected = (data: any) => {
+      setKycInfo({ kycStatus: 'rejected', isApproved: false, rejectReason: data?.reason });
+      updatePartner({ kycStatus: 'rejected', isApproved: false, kycRejectReason: data?.reason });
+      Alert.alert(
+        'KYC Update',
+        data?.reason || 'Aapke KYC documents reject ho gaye hain. Kripya sahi documents dobara upload karein.'
+      );
+      fetchData();
+    };
+
     socket.on('delivery_request', handleNewOrder);
     socket.on('newDeliveryRequest', handleNewOrder);
     socket.on('delivery_request_taken', handleRequestTaken);
@@ -190,6 +210,8 @@ const DashboardScreen = ({ navigation }: any) => {
     socket.on('orderCancelled', handleOrderCancelled);
     socket.on('order_ready', handleOrderReady);
     socket.on('orderDelivered', handleOrderDelivered);
+    socket.on('partner:kyc_approved', handleKycApproved);
+    socket.on('partner:kyc_rejected', handleKycRejected);
 
     return () => {
       socket.off('delivery_request', handleNewOrder);
@@ -199,6 +221,8 @@ const DashboardScreen = ({ navigation }: any) => {
       socket.off('orderCancelled', handleOrderCancelled);
       socket.off('order_ready', handleOrderReady);
       socket.off('orderDelivered', handleOrderDelivered);
+      socket.off('partner:kyc_approved', handleKycApproved);
+      socket.off('partner:kyc_rejected', handleKycRejected);
     };
   }, [fetchData, navigation]);
 
@@ -351,6 +375,30 @@ const DashboardScreen = ({ navigation }: any) => {
             />
           )}
         </View>
+
+        {/* Approved KYC Banner */}
+        {kycInfo.isApproved && kycInfo.kycStatus === 'verified' && (
+          <TouchableOpacity
+            style={styles.dashboardKycApprovedCard}
+            onPress={() => navigation.navigate('KycVerification')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.dashboardKycApprovedIconBox}>
+              <Ionicons name="checkmark-circle" size={24} color="#15803D" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.dashboardKycApprovedTitle}>Account Verified & Approved 🎉</Text>
+                <View style={styles.approvedPill}>
+                  <Text style={styles.approvedPillText}>Active</Text>
+                </View>
+              </View>
+              <Text style={styles.dashboardKycApprovedDesc}>
+                Aapka account verify ho chuka hai. Switch on karke online ja sakte hain aur orders receive kar sakte hain.
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* KYC Status Banner */}
         {(!kycInfo.isApproved || kycInfo.kycStatus !== 'verified') && (
@@ -829,6 +877,57 @@ const styles = StyleSheet.create({
   },
   totalLeft: { fontSize: 12, color: '#6B7280', fontWeight: '600' },
   totalRight: { fontSize: 12, color: '#6B7280', fontWeight: '600' },
+
+  // Dashboard KYC Approved Banner
+  dashboardKycApprovedCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  dashboardKycApprovedIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dashboardKycApprovedTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  approvedPill: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  approvedPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  dashboardKycApprovedDesc: {
+    fontSize: 12,
+    color: '#166534',
+    marginTop: 2,
+    lineHeight: 16,
+  },
 
   // Dashboard KYC Banner
   dashboardKycBanner: {
