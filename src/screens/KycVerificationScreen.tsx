@@ -558,6 +558,10 @@ export default function KycVerificationScreen({ navigation }: any) {
                   {uploadingDoc === 'drivingLicense' ? (
                     <ActivityIndicator size="small" color={theme.primary} />
                   ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={32} color="#9CA3AF" />
+                      <Text style={[styles.uploadBoxTitle, { color: '#4B5563' }]}>Upload License Photo</Text>
+                      <Text style={styles.uploadBoxSubtitle}>Optional document</Text>
                     </>
                   )}
                 </TouchableOpacity>
