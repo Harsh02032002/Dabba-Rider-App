@@ -33,20 +33,15 @@
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
     },
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FDFCF7"
+    },
     "plugins": [
       "expo-location",
       "expo-notifications",
-      "expo-font",
-      "expo-status-bar",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/icon.png",
-          "resizeMode": "contain",
-          "backgroundColor": "#FDFCF7",
-          "imageWidth": 200
-        }
-      ]
+      "expo-font"
     ],
     "extra": {
       "eas": {
