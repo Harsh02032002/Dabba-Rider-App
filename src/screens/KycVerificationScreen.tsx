@@ -104,13 +104,19 @@ export default function KycVerificationScreen({ navigation }: any) {
       const formData = new FormData();
       const uri = asset.uri;
       const uriParts = uri.split('.');
-      const fileType = uriParts[uriParts.length - 1] || 'jpg';
+      const fileType = (uriParts[uriParts.length - 1] || 'jpg').split('?')[0].toLowerCase();
 
-      formData.append('document', {
-        uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
-        name: `${docType}_${Date.now()}.${fileType}`,
-        type: `image/${fileType === 'png' ? 'png' : 'jpeg'}`,
-      } as any);
+      if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        formData.append('document', blob, `${docType}_${Date.now()}.${fileType}`);
+      } else {
+        formData.append('document', {
+          uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
+          name: `${docType}_${Date.now()}.${fileType}`,
+          type: `image/${fileType === 'png' ? 'png' : 'jpeg'}`,
+        } as any);
+      }
       formData.append('type', docType);
 
       const res = await uploadKycDocument(formData);
