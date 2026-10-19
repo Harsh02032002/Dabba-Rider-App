@@ -103,18 +103,35 @@ export default function KycVerificationScreen({ navigation }: any) {
     try {
       const formData = new FormData();
       const uri = asset.uri;
-      const uriParts = uri.split('.');
-      const fileType = (uriParts[uriParts.length - 1] || 'jpg').split('?')[0].toLowerCase();
+
+      // Cleanly resolve file extension without base64 string pollution
+      let fileExt = 'jpg';
+      if (asset.mimeType) {
+        fileExt = asset.mimeType.split('/')[1] || 'jpg';
+      } else if (uri.startsWith('data:image/')) {
+        const match = uri.match(/^data:image\/([a-zA-Z0-9]+);/);
+        fileExt = match ? match[1] : 'jpg';
+      } else if (asset.fileName && asset.fileName.includes('.')) {
+        fileExt = asset.fileName.split('.').pop()?.toLowerCase() || 'jpg';
+      } else if (uri.includes('.')) {
+        const part = uri.split('.').pop()?.split('?')[0]?.toLowerCase();
+        if (part && part.length <= 5 && !part.includes('/') && !part.includes(':')) {
+          fileExt = part;
+        }
+      }
+      if (fileExt === 'jpeg') fileExt = 'jpg';
+
+      const cleanFileName = `${docType}_${Date.now()}.${fileExt}`;
 
       if (Platform.OS === 'web') {
         const response = await fetch(uri);
         const blob = await response.blob();
-        formData.append('document', blob, `${docType}_${Date.now()}.${fileType}`);
+        formData.append('document', blob, cleanFileName);
       } else {
         formData.append('document', {
           uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
-          name: `${docType}_${Date.now()}.${fileType}`,
-          type: `image/${fileType === 'png' ? 'png' : 'jpeg'}`,
+          name: cleanFileName,
+          type: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
         } as any);
       }
       formData.append('type', docType);

@@ -118,7 +118,6 @@ export const getKycStatus = () => api.get('/api/partner/kyc');
 export const uploadKycDocument = (formData: FormData) =>
   api.post('/api/partner/kyc/document', formData, {
     headers: { 'Content-Type': undefined },
-    transformRequest: (data) => data,
   });
 
 export const submitKycDocuments = (data: {
