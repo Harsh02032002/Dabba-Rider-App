@@ -34,12 +34,21 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+let onUnauthorizedCallback: (() => void) | null = null;
+export const setOnUnauthorized = (cb: (() => void) | null) => {
+  onUnauthorizedCallback = cb;
+};
+
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
-    console.error('API Error:', err.response?.status, err.response?.data);
-    if (err.response?.status === 401 && err.response?.data?.message?.includes('token')) {
+    const status = err.response?.status;
+    const msg = (err.response?.data?.message || '').toLowerCase();
+    if (status === 401 && (msg.includes('token') || msg.includes('user not found') || msg.includes('unauthorized') || msg.includes('not authorized'))) {
       await AsyncStorage.multiRemove(['dabba_token', 'dabba_partner']);
+      if (onUnauthorizedCallback) {
+        onUnauthorizedCallback();
+      }
     }
     return Promise.reject(err);
   }

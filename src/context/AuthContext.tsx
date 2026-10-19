@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeliveryPartner } from '../types';
 import { connectSocket, disconnectSocket } from '../hooks/socket';
 import { registerForPushNotifications } from '../utils/pushNotifications';
+import { setOnUnauthorized, getPartnerProfile } from '../api/api';
 
 interface AuthContextType {
   partner: DeliveryPartner | null;
@@ -22,6 +23,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setOnUnauthorized(() => {
+      disconnectSocket();
+      setToken(null);
+      setPartner(null);
+    });
+  }, []);
+
+  useEffect(() => {
     (async () => {
       try {
         const t = await AsyncStorage.getItem('dabba_token');
@@ -33,6 +42,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setPartner(parsed);
             connectSocket(t);
             registerForPushNotifications();
+
+            // Verify token in background
+            getPartnerProfile().then((res) => {
+              if (res.data?.partner) {
+                setPartner(res.data.partner);
+                AsyncStorage.setItem('dabba_partner', JSON.stringify(res.data.partner));
+              }
+            }).catch(async (profileErr) => {
+              if (profileErr.response?.status === 401) {
+                await AsyncStorage.multiRemove(['dabba_token', 'dabba_partner']);
+                disconnectSocket();
+                setToken(null);
+                setPartner(null);
+              }
+            });
           }
         }
       } catch (e) {
