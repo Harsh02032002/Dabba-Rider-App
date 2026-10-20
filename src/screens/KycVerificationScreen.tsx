@@ -38,6 +38,24 @@ export default function KycVerificationScreen({ navigation }: any) {
   const [drivingLicenseNumber, setDrivingLicenseNumber] = useState('');
   const [drivingLicenseUrl, setDrivingLicenseUrl] = useState('');
 
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast((prev) => (prev?.message === message ? null : prev));
+    }, 4000);
+  };
+
+  const showDialog = (title: string, message: string, onOk?: () => void) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n\n${message}`);
+      if (onOk) onOk();
+    } else {
+      Alert.alert(title, message, [{ text: 'OK', onPress: onOk }]);
+    }
+  };
+
   const fetchKycInfo = useCallback(async () => {
     try {
       setLoading(true);
@@ -76,7 +94,7 @@ export default function KycVerificationScreen({ navigation }: any) {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(
+        showDialog(
           'Permission Required',
           'Gallery access is required to select document photos.'
         );
@@ -94,23 +112,47 @@ export default function KycVerificationScreen({ navigation }: any) {
         await uploadFile(docType, asset);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Could not pick image');
+      showDialog('Error', err.message || 'Could not pick image');
     }
   };
 
   const uploadFile = async (docType: string, asset: ImagePicker.ImagePickerAsset) => {
     setUploadingDoc(docType);
+    const docName = docType === 'aadhaar' ? 'Aadhaar Card' : docType === 'pan' ? 'PAN Card' : 'Driving License';
     try {
       const formData = new FormData();
       const uri = asset.uri;
-      const uriParts = uri.split('.');
-      const fileType = uriParts[uriParts.length - 1] || 'jpg';
 
-      formData.append('document', {
-        uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
-        name: `${docType}_${Date.now()}.${fileType}`,
-        type: `image/${fileType === 'png' ? 'png' : 'jpeg'}`,
-      } as any);
+      // Cleanly resolve file extension without base64 string pollution
+      let fileExt = 'jpg';
+      if (asset.mimeType) {
+        fileExt = asset.mimeType.split('/')[1] || 'jpg';
+      } else if (uri.startsWith('data:image/')) {
+        const match = uri.match(/^data:image\/([a-zA-Z0-9]+);/);
+        fileExt = match ? match[1] : 'jpg';
+      } else if (asset.fileName && asset.fileName.includes('.')) {
+        fileExt = asset.fileName.split('.').pop()?.toLowerCase() || 'jpg';
+      } else if (uri.includes('.')) {
+        const part = uri.split('.').pop()?.split('?')[0]?.toLowerCase();
+        if (part && part.length <= 5 && !part.includes('/') && !part.includes(':')) {
+          fileExt = part;
+        }
+      }
+      if (fileExt === 'jpeg') fileExt = 'jpg';
+
+      const cleanFileName = `${docType}_${Date.now()}.${fileExt}`;
+
+      if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        formData.append('document', blob, cleanFileName);
+      } else {
+        formData.append('document', {
+          uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
+          name: cleanFileName,
+          type: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+        } as any);
+      }
       formData.append('type', docType);
 
       const res = await uploadKycDocument(formData);
@@ -118,12 +160,16 @@ export default function KycVerificationScreen({ navigation }: any) {
         if (docType === 'aadhaar') setAadhaarUrl(res.data.url);
         else if (docType === 'pan') setPanUrl(res.data.url);
         else if (docType === 'drivingLicense') setDrivingLicenseUrl(res.data.url);
-        Alert.alert('Success', `${docType.toUpperCase()} document uploaded successfully!`);
+
+        showToast(`✓ ${docName} photo uploaded successfully!`, 'success');
+        showDialog('Upload Successful', `${docName} photo has been uploaded successfully!`);
       } else {
         // Fallback to local URI
         if (docType === 'aadhaar') setAadhaarUrl(uri);
         else if (docType === 'pan') setPanUrl(uri);
         else if (docType === 'drivingLicense') setDrivingLicenseUrl(uri);
+
+        showToast(`✓ ${docName} photo selected`, 'info');
       }
     } catch (e: any) {
       console.log('Upload fallback using uri:', e?.message);
@@ -131,7 +177,9 @@ export default function KycVerificationScreen({ navigation }: any) {
       if (docType === 'aadhaar') setAadhaarUrl(asset.uri);
       else if (docType === 'pan') setPanUrl(asset.uri);
       else if (docType === 'drivingLicense') setDrivingLicenseUrl(asset.uri);
-      Alert.alert('Notice', 'Image selected. Please click Submit below to save your KYC.');
+
+      showToast(`✓ ${docName} photo selected`, 'info');
+      showDialog('Notice', 'Image selected. Please click Submit below to save your KYC.');
     } finally {
       setUploadingDoc(null);
     }
@@ -142,19 +190,19 @@ export default function KycVerificationScreen({ navigation }: any) {
     const cleanPan = panNumber.trim().toUpperCase();
 
     if (!cleanAadhaar || cleanAadhaar.length < 12) {
-      Alert.alert('Validation Error', 'Kripya 12-digit valid Aadhaar number daalein.');
+      showDialog('Validation Error', 'Kripya 12-digit valid Aadhaar number daalein.');
       return;
     }
     if (!aadhaarUrl) {
-      Alert.alert('Validation Error', 'Kripya Aadhaar card ki photo upload karein.');
+      showDialog('Validation Error', 'Kripya Aadhaar card ki photo upload karein.');
       return;
     }
     if (!cleanPan || cleanPan.length !== 10) {
-      Alert.alert('Validation Error', 'Kripya valid 10-character PAN number daalein (jaise ABCDE1234F).');
+      showDialog('Validation Error', 'Kripya valid 10-character PAN number daalein (jaise ABCDE1234F).');
       return;
     }
     if (!panUrl) {
-      Alert.alert('Validation Error', 'Kripya PAN card ki photo upload karein.');
+      showDialog('Validation Error', 'Kripya PAN card ki photo upload karein.');
       return;
     }
 
@@ -175,23 +223,19 @@ export default function KycVerificationScreen({ navigation }: any) {
         setRejectReason(null);
         await updatePartner({ kycStatus: 'submitted', isApproved: false });
 
-        Alert.alert(
+        showToast('🎉 KYC Documents submitted successfully for Admin review!', 'success');
+        showDialog(
           'Documents Submitted! 🎉',
           'Aapke KYC documents admin verification ke liye submit ho gaye hain. Admin approval ke baad aapka account active ho jayega aur aap online delivery orders accept kar sakenge.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                fetchKycInfo();
-              },
-            },
-          ]
+          () => {
+            fetchKycInfo();
+          }
         );
       } else {
-        Alert.alert('Submission Failed', res.data?.message || 'Could not submit documents.');
+        showDialog('Submission Failed', res.data?.message || 'Could not submit documents.');
       }
     } catch (err: any) {
-      Alert.alert(
+      showDialog(
         'Submission Error',
         err.response?.data?.message || 'Submission failed. Please try again.'
       );
@@ -271,6 +315,39 @@ export default function KycVerificationScreen({ navigation }: any) {
       <StatusBar barStyle="light-content" backgroundColor={theme.primary} />
       <AppHeader title="Documents & Verification" showBack />
 
+      {/* Interactive Toast Notification */}
+      {toast && (
+        <View style={[
+          styles.toastBanner,
+          toast.type === 'error' ? styles.toastError : toast.type === 'info' ? styles.toastInfo : styles.toastSuccess
+        ]}>
+          <Ionicons
+            name={toast.type === 'error' ? 'alert-circle' : toast.type === 'info' ? 'information-circle' : 'checkmark-circle'}
+            size={22}
+            color="#fff"
+          />
+          <Text style={styles.toastText}>{toast.message}</Text>
+          <TouchableOpacity onPress={() => setToast(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="close" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Uploading progress modal */}
+      {uploadingDoc && (
+        <View style={styles.uploadingOverlay}>
+          <View style={styles.uploadingCard}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={styles.uploadingTitle}>
+              Uploading {uploadingDoc === 'aadhaar' ? 'Aadhaar Card' : uploadingDoc === 'pan' ? 'PAN Card' : 'Driving License'}...
+            </Text>
+            <Text style={styles.uploadingSubtitle}>
+              Compressing & storing image safely in Cloudinary.
+            </Text>
+          </View>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
@@ -278,9 +355,11 @@ export default function KycVerificationScreen({ navigation }: any) {
         </View>
       ) : (
         <ScrollView
-          style={styles.content}
-          contentContainerStyle={{ paddingBottom: 60 }}
-          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={true}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled={true}
         >
           {renderStatusBanner()}
 
@@ -312,6 +391,10 @@ export default function KycVerificationScreen({ navigation }: any) {
               {aadhaarUrl ? (
                 <View style={styles.previewContainer}>
                   <Image source={{ uri: aadhaarUrl }} style={styles.previewImage} resizeMode="cover" />
+                  <View style={styles.uploadedBadge}>
+                    <Ionicons name="checkmark-circle" size={15} color="#15803D" />
+                    <Text style={styles.uploadedBadgeText}>Uploaded Successfully</Text>
+                  </View>
                   {!isLocked && (
                     <TouchableOpacity
                       style={styles.changeBtn}
@@ -377,6 +460,10 @@ export default function KycVerificationScreen({ navigation }: any) {
               {panUrl ? (
                 <View style={styles.previewContainer}>
                   <Image source={{ uri: panUrl }} style={styles.previewImage} resizeMode="cover" />
+                  <View style={styles.uploadedBadge}>
+                    <Ionicons name="checkmark-circle" size={15} color="#15803D" />
+                    <Text style={styles.uploadedBadgeText}>Uploaded Successfully</Text>
+                  </View>
                   {!isLocked && (
                     <TouchableOpacity
                       style={styles.changeBtn}
@@ -441,6 +528,10 @@ export default function KycVerificationScreen({ navigation }: any) {
               {drivingLicenseUrl ? (
                 <View style={styles.previewContainer}>
                   <Image source={{ uri: drivingLicenseUrl }} style={styles.previewImage} resizeMode="cover" />
+                  <View style={styles.uploadedBadge}>
+                    <Ionicons name="checkmark-circle" size={15} color="#15803D" />
+                    <Text style={styles.uploadedBadgeText}>Uploaded Successfully</Text>
+                  </View>
                   {!isLocked && (
                     <TouchableOpacity
                       style={styles.changeBtn}
@@ -524,10 +615,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+    height: '100%',
   },
-  content: {
+  scrollView: {
     flex: 1,
+    width: '100%',
+    minHeight: 0,
+  },
+  scrollContent: {
     padding: 16,
+    paddingBottom: 100,
+    flexGrow: 1,
   },
   centerContainer: {
     flex: 1,
@@ -772,5 +870,98 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  uploadedBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+  },
+  uploadedBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  toastBanner: {
+    backgroundColor: '#16A34A',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginTop: 10,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  toastSuccess: {
+    backgroundColor: '#16A34A',
+  },
+  toastError: {
+    backgroundColor: '#DC2626',
+  },
+  toastInfo: {
+    backgroundColor: '#2563EB',
+  },
+  toastText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 99999,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  uploadingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 320,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  uploadingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginTop: 14,
+    textAlign: 'center',
+  },
+  uploadingSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 6,
+    textAlign: 'center',
   },
 });

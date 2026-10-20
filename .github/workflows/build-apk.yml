@@ -66,6 +66,7 @@ jobs:
           chmod +x android/gradlew
           # Grant executable permissions to Hermes compiler and binaries
           chmod -R +x node_modules/react-native/sdks/hermesc/ || true
+          chmod -R +x node_modules/hermes-compiler/hermesc/ || true
           find node_modules/ -type f -name "hermesc*" -exec chmod +x {} + 2>/dev/null || true
           find node_modules/.bin -type f -exec chmod +x {} + 2>/dev/null || true
 
@@ -74,7 +75,7 @@ jobs:
         env:
           NODE_ENV: production
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m"
-        run: ./gradlew assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a --no-daemon
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a --no-daemon --stacktrace
 
       - name: Prepare Rider APK for Download
         run: |

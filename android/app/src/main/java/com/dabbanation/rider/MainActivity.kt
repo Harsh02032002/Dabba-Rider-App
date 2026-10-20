@@ -1,4 +1,4 @@
-package com.harsh02032002.dabbariderapp
+package com.dabbanation.rider
 
 import android.os.Build
 import android.os.Bundle

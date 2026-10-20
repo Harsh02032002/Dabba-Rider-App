@@ -84,7 +84,14 @@ const AppNavigator = () => {
             <Stack.Screen name="Main" component={HomeTabs} />
             <Stack.Screen name="ActiveOrder" component={ActiveOrderScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
-            <Stack.Screen name="KycVerification" component={KycVerificationScreen} />
+            <Stack.Screen
+              name="KycVerification"
+              component={KycVerificationScreen}
+              options={{
+                gestureEnabled: false,
+                cardStyle: { flex: 1, height: '100%' },
+              }}
+            />
           </>
         )}
       </Stack.Navigator>
