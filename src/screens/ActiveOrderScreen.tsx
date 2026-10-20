@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput,
   ActivityIndicator, Alert, Modal, Linking, Platform, StatusBar, Dimensions,
+  Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -181,6 +182,7 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
 
   const handleOTPConfirm = async () => {
     if (!order || updating) return;
+    Keyboard.dismiss();
     if (otp.length !== 4) { setOtpError('Please enter the 4-digit OTP'); return; }
     setUpdating(true);
     setOtpError('');
@@ -465,33 +467,61 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* OTP Modal */}
-      <Modal visible={showOTPModal} transparent animationType="slide">
-        <View style={styles.otpOverlay}>
+      {/* OTP Modal with iOS keyboard dismiss support */}
+      <Modal
+        visible={showOTPModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { Keyboard.dismiss(); setShowOTPModal(false); }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.otpOverlay}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+          </TouchableWithoutFeedback>
           <View style={styles.otpCard}>
-            <Text style={styles.otpTitle}>Enter Delivery OTP</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <Text style={styles.otpTitle}>Enter Delivery OTP</Text>
+              <TouchableOpacity
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                onPress={() => { Keyboard.dismiss(); setShowOTPModal(false); setOtp(""); setOtpError(""); }}
+              >
+                <Ionicons name="close-circle" size={26} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
             <Text style={styles.otpDesc}>Ask the customer for the 4-digit OTP to confirm delivery</Text>
             <TextInput
               style={styles.otpInput}
               value={otp}
-              onChangeText={setOtp}
-              keyboardType="numeric"
+              onChangeText={(val) => {
+                const cleaned = val.replace(/\D/g, "").slice(0, 4);
+                setOtp(cleaned);
+                if (cleaned.length === 4) {
+                  Keyboard.dismiss();
+                }
+              }}
+              keyboardType="number-pad"
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
               maxLength={4}
               placeholder="_ _ _ _"
               placeholderTextColor="#D1D5DB"
               textAlign="center"
+              autoFocus
             />
             {otpError ? <Text style={styles.otpError}>{otpError}</Text> : null}
             <View style={styles.otpActions}>
               <TouchableOpacity
                 style={styles.otpCancel}
-                onPress={() => { setShowOTPModal(false); setOtp(''); setOtpError(''); }}
+                onPress={() => { Keyboard.dismiss(); setShowOTPModal(false); setOtp(""); setOtpError(""); }}
               >
                 <Text style={styles.otpCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.otpConfirm, updating && { opacity: 0.7 }]}
-                onPress={handleOTPConfirm}
+                onPress={() => { Keyboard.dismiss(); handleOTPConfirm(); }}
                 disabled={updating}
               >
                 {updating
@@ -500,7 +530,7 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
