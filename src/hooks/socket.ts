@@ -7,12 +7,29 @@ const API_PORT = process.env.EXPO_PUBLIC_API_PORT || '5000';
 
 const getSocketConfig = () => {
   if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.location?.hostname) {
+      const proto = window.location.protocol || 'http:';
+      return {
+        url: `${proto}//${window.location.hostname}:${API_PORT}`,
+        path: '/socket.io',
+      };
+    }
     return {
       url: `http://localhost:${API_PORT}`,
       path: '/socket.io',
     };
   }
-  const hostUri = Constants.expoConfig?.hostUri;
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    const raw = process.env.EXPO_PUBLIC_API_URL.replace(/\/api\/?$/, '');
+    return {
+      url: raw,
+      path: '/socket.io',
+    };
+  }
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest?.debuggerHost ||
+    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
   if (hostUri) {
     const ip = hostUri.split(':')[0];
     return {
