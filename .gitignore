@@ -23,3 +23,6 @@ yarn-error.*
 .DS_Store
 Thumbs.db
 
+
+# Local machine settings (LAN IP for Expo Go)
+.env
