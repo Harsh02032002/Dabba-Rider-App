@@ -7,6 +7,7 @@ import { registerPushToken } from '../api/api';
 // Show notifications as banners even when the app is open
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
+    shouldShowAlert: true,
     shouldShowBanner: true,
     shouldShowList: true,
     shouldPlaySound: true,
