@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Platform,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Platform, Alert, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { theme } from '../theme/colors';
 import { AppHeader } from '../components/AppHeader';
+import { deleteAccount } from '../api/api';
+
+const PRIVACY_URL = 'https://dabbanation.in/privacy-policy';
 
 const ProfileScreen = ({ navigation }: any) => {
   const { partner, logout } = useAuth();
@@ -15,6 +18,30 @@ const ProfileScreen = ({ navigation }: any) => {
 
   const handleLogout = async () => {
     await logout();
+  };
+
+  // Play Store requirement: riders can delete their account from the app
+  const handleDeleteAccount = () => {
+    const run = async () => {
+      try {
+        await deleteAccount();
+        await logout();
+      } catch (err: any) {
+        const message = err?.response?.data?.message || 'Could not delete your account. Please try again.';
+        if (Platform.OS === 'web') window.alert(message); else Alert.alert('Account not deleted', message);
+      }
+    };
+    const text = 'This permanently deletes your profile, documents and bank details, and any unpaid wallet balance. Past deliveries are kept without your name, as required by law. This cannot be undone.';
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete your account?
+
+${text}`)) run();
+      return;
+    }
+    Alert.alert('Delete your account?', text, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete account', style: 'destructive', onPress: run },
+    ]);
   };
 
   const menuItems = [
@@ -28,6 +55,8 @@ const ProfileScreen = ({ navigation }: any) => {
     },
     { icon: 'help-circle-outline', label: 'Help & Support', color: '#f59e0b', action: () => setShowSupport(true) },
     { icon: 'language-outline', label: `Language: ${language}`, color: '#10b981', action: () => setShowLang(true) },
+    { icon: 'shield-checkmark-outline', label: 'Privacy Policy', color: '#0ea5e9', action: () => Linking.openURL(PRIVACY_URL) },
+    { icon: 'trash-outline', label: 'Delete Account', color: '#ef4444', action: handleDeleteAccount },
     { icon: 'shield-checkmark-outline', label: 'Terms & Conditions', color: '#64748b' },
     { icon: 'settings-outline', label: 'App Settings', color: '#4b5563' },
   ];
