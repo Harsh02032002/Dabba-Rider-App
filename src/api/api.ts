@@ -129,6 +129,10 @@ export const confirmDeliveryOTP = (orderId: string, otp: string) =>
   api.post('/api/order/confirm-delivery', { orderId, otp });
 
 // Wallet
+// Permanently delete the rider account (personal data and documents erased)
+export const deleteAccount = () =>
+  api.delete('/api/partner/account', { data: { confirm: 'DELETE' } });
+
 export const requestWithdrawal = (amount: number) =>
   api.post('/api/partner/withdraw', { amount });
 
