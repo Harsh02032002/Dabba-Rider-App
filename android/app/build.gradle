@@ -97,6 +97,12 @@ android {
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
+    // Release builds for the Play Store are signed with the upload key. Provide it in
+    // ~/.gradle/gradle.properties or environment variables (never commit the keystore or passwords):
+    //   DABBA_UPLOAD_STORE_FILE, DABBA_UPLOAD_STORE_PASSWORD, DABBA_UPLOAD_KEY_ALIAS, DABBA_UPLOAD_KEY_PASSWORD
+    // EAS Build signs with the upload key it manages and ignores this block.
+    def uploadProp = { String name -> findProperty(name) ?: System.getenv(name) }
+    def hasUploadKey = uploadProp('DABBA_UPLOAD_STORE_FILE') != null
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -104,15 +110,22 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (hasUploadKey) {
+            release {
+                storeFile file(uploadProp('DABBA_UPLOAD_STORE_FILE'))
+                storePassword uploadProp('DABBA_UPLOAD_STORE_PASSWORD')
+                keyAlias uploadProp('DABBA_UPLOAD_KEY_ALIAS')
+                keyPassword uploadProp('DABBA_UPLOAD_KEY_PASSWORD')
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Upload key when configured (Play Store); debug key only for local/CI test builds
+            signingConfig hasUploadKey ? signingConfigs.release : signingConfigs.debug
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
