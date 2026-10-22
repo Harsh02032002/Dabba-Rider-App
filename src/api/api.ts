@@ -125,6 +125,9 @@ export const acceptOrder = (orderId: string) =>
 export const updateOrderStatus = (orderId: string, status: string) =>
   api.put('/api/order/status-update', { orderId, status });
 
+export const sendDeliveryOTP = (orderId: string) =>
+  api.post('/api/order/send-delivery-otp', { orderId });
+
 export const confirmDeliveryOTP = (orderId: string, otp: string) =>
   api.post('/api/order/confirm-delivery', { orderId, otp });
 

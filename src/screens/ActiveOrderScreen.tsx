@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import { getCurrentOrder, updateOrderStatus, confirmDeliveryOTP } from '../api/api';
+import { getCurrentOrder, updateOrderStatus, confirmDeliveryOTP, sendDeliveryOTP } from '../api/api';
 import { emitOrderStatusUpdate, emitLocationUpdate, getSocket } from '../hooks/socket';
 import { Order, DeliveryStatus } from '../types';
 import { theme } from '../theme/colors';
@@ -46,6 +46,8 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState('');
+  const [customerEmailMasked, setCustomerEmailMasked] = useState<string | null>(null);
+  const [sendingOtp, setSendingOtp] = useState(false);
   const [riderLocation, setRiderLocation] = useState<{ lat: number; lng: number; heading?: number | null } | null>(null);
   const locationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
@@ -157,9 +159,27 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
     };
   }, [isReadOnly, order?._id, order?.status]);
 
+    const handleTriggerDelivered = async () => {
+    if (!order) return;
+    setSendingOtp(true);
+    setOtpError('');
+    try {
+      const res = await sendDeliveryOTP(order._id);
+      if (res.data?.maskedEmail) {
+        setCustomerEmailMasked(res.data.maskedEmail);
+      }
+      setShowOTPModal(true);
+    } catch (err: any) {
+      console.warn('sendDeliveryOTP error:', err?.message);
+      setShowOTPModal(true);
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
   const handleStatusUpdate = async (nextStatus: DeliveryStatus) => {
     if (!order || updating) return;
-    if (nextStatus === 'delivered') { setShowOTPModal(true); return; }
+    if (nextStatus === 'delivered') { handleTriggerDelivered(); return; }
     setUpdating(true);
     try {
       const { data } = await updateOrderStatus(order._id, nextStatus);
@@ -316,6 +336,27 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
           <Text style={styles.mapTitleText}>Order Details</Text>
         </View>
       </View>
+
+      {/* ── Quick Delivered Button Directly Below Map ── */}
+      {!isReadOnly && order.status !== 'delivered' && (
+        <View style={styles.mapDeliveredBar}>
+          <TouchableOpacity
+            style={[styles.deliveredActionBtn, (updating || sendingOtp) && { opacity: 0.7 }]}
+            onPress={handleTriggerDelivered}
+            disabled={updating || sendingOtp}
+            activeOpacity={0.88}
+          >
+            {sendingOtp ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Ionicons name="checkmark-done-circle" size={22} color="#fff" />
+            )}
+            <Text style={styles.deliveredActionBtnText}>
+              {sendingOtp ? 'Sending OTP to Customer Email...' : 'Delivered (Verify with Customer OTP)'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Bottom Sheet ── */}
       <ScrollView style={styles.bottomSheet} showsVerticalScrollIndicator={false}>
@@ -491,7 +532,21 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
                 <Ionicons name="close-circle" size={26} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
-            <Text style={styles.otpDesc}>Ask the customer for the 4-digit OTP to confirm delivery</Text>
+            <Text style={styles.otpDesc}>
+              {customerEmailMasked
+                ? `A 4-digit verification code has been sent to customer's email (${customerEmailMasked}). Ask customer for the code to confirm delivery.`
+                : 'A 4-digit verification code has been sent to customer\'s email and customer app. Ask customer for the code to confirm delivery.'}
+            </Text>
+            <TouchableOpacity
+              style={styles.resendOtpBtn}
+              onPress={handleTriggerDelivered}
+              disabled={sendingOtp}
+            >
+              <Ionicons name="mail-outline" size={15} color={theme.primary} />
+              <Text style={styles.resendOtpText}>
+                {sendingOtp ? 'Resending Code...' : 'Resend Code to Email'}
+              </Text>
+            </TouchableOpacity>
             <TextInput
               style={styles.otpInput}
               value={otp}
@@ -541,6 +596,45 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F5F5' },
 
   // Map
+  mapDeliveredBar: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  deliveredActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#16A34A',
+    height: 48,
+    borderRadius: 12,
+  },
+  deliveredActionBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  resendOtpBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 16,
+    paddingVertical: 6,
+  },
+  resendOtpText: {
+    fontSize: 13,
+    color: theme.primary,
+    fontWeight: '700',
+  },
   mapContainer: { height: height * 0.44, position: 'relative', backgroundColor: '#E8F4FD' },
   backBtn: {
     position: 'absolute', top: 48, left: 16, zIndex: 10,
