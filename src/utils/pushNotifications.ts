@@ -5,15 +5,17 @@ import Constants from 'expo-constants';
 import { registerPushToken } from '../api/api';
 
 // Show notifications as banners even when the app is open
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  } as any),
-});
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    } as any),
+  });
+}
 
 /**
  * Asks permission, gets the Expo push token for this phone and saves it on the backend

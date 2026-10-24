@@ -203,7 +203,7 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
   const handleOTPConfirm = async () => {
     if (!order || updating) return;
     Keyboard.dismiss();
-    if (otp.length !== 4) { setOtpError('Please enter the 4-digit OTP'); return; }
+    if (otp.length < 4 || otp.length > 6) { setOtpError('Please enter the delivery OTP'); return; }
     setUpdating(true);
     setOtpError('');
     try {
@@ -560,7 +560,7 @@ const ActiveOrderScreen = ({ navigation, route }: any) => {
               keyboardType="number-pad"
               returnKeyType="done"
               onSubmitEditing={() => Keyboard.dismiss()}
-              maxLength={4}
+              maxLength={6}
               placeholder="_ _ _ _"
               placeholderTextColor="#D1D5DB"
               textAlign="center"
