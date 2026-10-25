@@ -26,3 +26,6 @@ Thumbs.db
 
 # Local machine settings (LAN IP for Expo Go)
 .env
+
+# local env files (LAN dev URLs; dev server only)
+.env*.local
