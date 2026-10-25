@@ -73,7 +73,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
     }
 
     await registerPushToken(token);
-    console.log('[Push] Rider push token registered:', token);
+    if (__DEV__) console.log('[Push] Rider push token registered');
     return token;
   } catch (err: any) {
     console.log('[Push] Registration failed:', err?.message || err);
