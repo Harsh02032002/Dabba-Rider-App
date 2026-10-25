@@ -103,6 +103,13 @@ android {
     // EAS Build signs with the upload key it manages and ignores this block.
     def uploadProp = { String name -> findProperty(name) ?: System.getenv(name) }
     def hasUploadKey = uploadProp('DABBA_UPLOAD_STORE_FILE') != null
+    // A Play bundle signed with the debug key is rejected on upload, so refuse to build one locally
+    gradle.taskGraph.whenReady { graph ->
+        def buildsPlayBundle = graph.allTasks.any { it.name.startsWith('bundle') && it.name.endsWith('Release') }
+        if (buildsPlayBundle && !hasUploadKey && System.getenv('EAS_BUILD') == null) {
+            throw new GradleException('Release bundle needs the upload key: set DABBA_UPLOAD_STORE_FILE, DABBA_UPLOAD_STORE_PASSWORD, DABBA_UPLOAD_KEY_ALIAS and DABBA_UPLOAD_KEY_PASSWORD')
+        }
+    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -124,7 +131,7 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Upload key when configured (Play Store); debug key only for local/CI test builds
+            // Upload key when configured (Play Store); debug key only for local test APKs (bundleRelease refuses it)
             signingConfig hasUploadKey ? signingConfigs.release : signingConfigs.debug
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
