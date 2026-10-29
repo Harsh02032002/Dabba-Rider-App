@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "DabbaNation Delivery",
+    "name": "Dabba Nation Delivery",
     "slug": "dabba-rider-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,13 +16,13 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#FDFCF7"
+        "backgroundColor": "#FFFFFF"
       },
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "POST_NOTIFICATIONS",
-        "VIBRATE"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE"
       ],
       "package": "com.dabbanation.rider",
       "googleServicesFile": "./google-services.json",
@@ -50,7 +50,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow DabbaNation Delivery to use your photos to upload KYC documents.",
+          "photosPermission": "Allow Dabba Nation Delivery to use your photos to upload KYC documents.",
           "cameraPermission": false,
           "microphonePermission": false
         }
@@ -58,8 +58,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "45d2828d-ffe8-4955-9805-2aa85632f51b"
+        "projectId": "4a4d0298-e3ba-4ba2-8e18-0ef64d128e56"
       }
-    }
+    },
+    "owner": "dhruvparmar2003"
   }
 }
